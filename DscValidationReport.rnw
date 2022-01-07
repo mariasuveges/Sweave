@@ -1,0 +1,1800 @@
+
+
+\documentclass[CU8,TN]{dpacdoc}
+%
+\usepackage{lscape}
+\usepackage{graphicx}
+%
+%\begin{document}
+%
+%%example of how to add your local logo - the file must appear in your texinputs
+%%\setDpacDocLocalLogo{local_logo}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Sweave preamble:
+
+%\documentclass{article}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{times}
+\usepackage{float}
+
+%\textwidth=6.2in
+%\textheight=8.5in
+%%\parskip=.3cm
+%\oddsidemargin=.1in
+%\evensidemargin=.1in
+%\headheight=-.3in
+
+
+%------------------------------------------------------------
+% newcommand
+%------------------------------------------------------------
+\newcommand{\scscst}{\scriptscriptstyle}
+\newcommand{\scst}{\scriptstyle}
+\newcommand{\Robject}[1]{{\texttt{#1}}}
+\newcommand{\Rfunction}[1]{{\texttt{#1}}}
+\newcommand{\Rclass}[1]{\textit{#1}}
+\newcommand{\Rpackage}[1]{\textit{#1}}
+\newcommand{\Rexpression}[1]{\texttt{#1}}
+\newcommand{\Rmethod}[1]{{\texttt{#1}}}
+\newcommand{\Rfunarg}[1]{{\texttt{#1}}}
+
+
+\usepackage{Sweave}
+\begin{document}
+
+\setkeys{Gin}{width=1.1\textwidth}
+%
+\setDpacDocCompact{true}
+%
+\setDpacDocTitle[DSC validation report]{DSC validation report for the ApsisVal3.3a run} \setDpacDocAbstract{} 
+\setDpacDocDate{\today}
+%\setDpacDocApprove{}
+\setDpacDocIssue{1}   % 'D' for draft, change to number 1 when submitted to Livelink
+\setDpacDocRevision{0}
+\setDpacDocRef{GAIA-C8-TN-MPIA-MSU-005-\dpacDocIssue}
+\setDpacDocStatus{Draft}  % change to "Issued" once submitted Livelink
+\setDpacDocAuthor{M. S\"uveges }
+%
+%%\setDpacDocAffil{My institute }   %optional field
+\setDpacDU{MPIA}
+%
+\mktitle
+
+% comment if you do not want a TOC
+\tableofcontents
+\newpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% This document uses the workspace
+% /Users/sueveges/Documents/DSC/R/cycle3/ValidationData/apsis_val3.3a/validation1.RData
+% validating the apsis_val3.3a run on 2019.01.14.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Overview}
+
+This report was prepared using the validation data of DSC from the apsis\_val3.3a on February 1, 2019. 
+
+\section{Validation data set}
+
+\subsection{Class composition}
+
+<<echo=false>>=
+library(xtable)
+
+library(mapproj)
+library(maps)
+library(gplots)
+
+cu8class.str.all <- c("Catacl.", "CU7 QSO", "WD-Mdw bin.", "WD-MS bin.", "Star", "WD", "Binary", "Quasar", "Galaxy")
+cu8class.names.all <- as.character(c(-4,-3,-2,-1,0,1,2,4,5))
+cu8class.nums.all <- c(-4,-3,-2,-1,0,1,2,4,5)
+
+
+t.tmp0 <- factor(dscinfo$true_SourceType, levels = c(-4,-3,-2,-1,0,1,2,4,5))
+t.tmp1 <- factor(gaia0$true_SourceType, levels = c(-4,-3,-2,-1,0,1,2,4,5))
+tr.tmp <- factor(gaia0$true_SourceType[gaia0$testset == "FALSE"], levels = c(-4,-3,-2,-1,0,1,2,4,5))
+ts.tmp <- factor(gaia0$true_SourceType[gaia0$testset == "TRUE"], levels = c(-4,-3,-2,-1,0,1,2,4,5))
+v.tmp <- data.frame(
+    DSCnotation = c("(-4)","(-3)","(-2)","(-1)","0","1","2","4","5"),
+    CrossmatchedList = as.numeric(table(t.tmp0)),
+    ProcessedSources = as.numeric(table(t.tmp1)),
+    Loss =  as.numeric(table(t.tmp0) - table(t.tmp1)),
+    TrainingSet = as.numeric(table(tr.tmp)),
+    TestSet = as.numeric(table(ts.tmp)))
+rownames(v.tmp) <- c("Catacl.","CU7 QSO cand.","WD-M dwarf bin.","WD-MS bin.","Star","WD","Binary","QSO","Galaxy")
+colnames(v.tmp) <- c("DSC not.","Total","Processed","Loss","Training","Test")
+@
+<<label=tableValDataClasses,echo=false, results=tex>>=
+xtable(v.tmp, caption = "Class distribution of the DSC validation data set. In the leftmost column, the (bracketed) negative integers represent classes into which DSC does not classify.", label = "table:valDataClasses", digits = 0)
+@
+
+The class composition of the complete validation data set and its subsets used as training and test sets are summarized in Table~\ref{table:valDataClasses}. The classes DSC classifies into are stars, white dwarfs (WDs), physical binaries, quasars and galaxies, henceforth termed `regular classes' in this document. The enumeration values corresponding to them in the Java codes are (as shown in the second column of Table~\ref{table:valDataClasses}) 0, 1, 2, 4, 5, respectively. Of these objects, empirical training of the ExtraTree classifier used a subset of approximately 150000. The remaining more than 900000 objects were used to test and validate the performance of DSC. 
+
+Apart from these regular classes, the validation set contains also classes which do not have an unambiguous true class, such as cataclysmic variables and two different white dwarf-star binary types. For all these, at least two predicted class labels could be accepted as true (either of star, WD or binary). In order to enable MSC to deal with them, in the past they were included in the binary class. However, this caused considerable confusion in the classification of not only stars, binaries and white dwarfs, but also that of quasars. For this run, these objects were therefore not used to train ExtraTrees (cf. column `Training' in Table~\ref{table:valDataClasses}).
+
+For a detailed description of the present DSC validation set, see the technical note MSU-001.
+
+
+\subsection{Sky maps of validation objects}
+
+<<fig=FALSE,echo=FALSE,results=hide>>=
+
+png("figures/SkymapClasses.png", height=600, width=1200, pointsize=20)
+
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 64, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 64, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 64, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 64, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 64, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 64, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 64, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 64, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 64, maxColorValue = 255))
+p.tmp <- c('-3' = 1, '-2' = 2,  '-1' = 2, '0' = 3, '1' = 17, '2' = 8, '4' = 18, '5' = 16)
+layout(matrix(1:2, ncol = 2), width = c(1, 0.4))
+par(mar = c(2.5,2.5,2,1), mgp = c(1.6,0.6,0))
+plot(mapproject(gaia1$Ra*180/pi, gaia1$Dec*180/pi, projection = "aitoff"),
+       pch = p.tmp[as.character(gaia1$true_SourceType)], cex = 0.3, 
+       col = tc.tmp[as.character(gaia1$true_SourceType)], axes = F, 
+       xlab = "", ylab = "", cex.axis = 1, cex.lab = 1)
+par(mar = c(2.5,0,2,1), mgp = c(1.6,0.6,0))
+plot(NA, NA, xlim = c(0,1), ylim = c(0,1), xlab  = "", ylab = "", axes = F)
+legend(0, 1, bty = "n", pch = 16, pt.cex = 0.6, col = c.tmp, legend = cu8class.str.all)
+dev.off()
+@
+
+\begin{figure}[H]
+\begin{center}
+\includegraphics{figures/SkymapClasses.png}
+\end{center}
+\caption{Sky map of the sources. The colour of the different classes is consistent throughout this document: orange for stars, blue for white dwarfs, red for physical binaries, purple for quasars, green for galaxies, cyan for cataclysmic variables, light blue for white dwarf-M dwarf binaries, and dark blue for white dwarf-main sequence star binaries.}
+\label{fig:skymapClasses}
+\end{figure}
+
+Figures \ref{fig:skymapClasses} and \ref{fig:skymapClasswise} show the distribution of the different classes of validation objects over the sky. The images mostly reflect the catalogs from which the objects were collected. For example, among the stars (top left of Fig. \ref{fig:skymapClasswise}), the three densely populated bands consist of all Simbad objects in 10$^\circ$ wide stripes along three meridians for which all classification provided on Simbad corresponded to single stars. The white dwarfs (top right) and the white dwarf-star binaries (bottom) follow in majority the footprint of the Sloan Digital Sky Survey. A large part of the quasar set too was drawn from the SDSS Data Release 14, but since it was combined with other, all-sky catalogs of quasars (e.g. AllWise), the dominant structure in it is the band of the Milky Way, devoid of extragalactic objects. 
+
+\setkeys{Gin}{width=1\textwidth}
+
+<<fig=FALSE,echo=FALSE,results=hide>>=
+
+png("figures/SkymapClasswise.png", height=1200, width=1200, pointsize=20)
+
+p.tmp <- c('-4' = 16, '-3' = 1, '-2' = 2,  '-1' = 2, '0' = 3, '1' = 17, '2' = 8, '4' = 18, '5' = 16)
+par(mfrow = c(4,2), mar = c(1,1,2,1), mgp = c(1.6,0.6,0))
+for(ii in c(5:9,1,3,4))
+       {
+         c.tmp2 <- rep("transparent", 9)
+         c.tmp2[ii] <- c.tmp[ii]
+         names(c.tmp2) <- names(c.tmp)
+         x.tmp <- c('-4' = 0.4, '-3' = 0.2, '-2' = 0.4,  '-1' = 0.4, '0' = 0.4, '1' = 0.4, '2' = 0.4, '4' = 0.4, '5' = 0.4)
+	plot(mapproject(gaia1$Ra*180/pi, gaia1$Dec*180/pi, projection = "aitoff"),
+	       pch = p.tmp[as.character(gaia1$true_SourceType)], 
+	       cex = x.tmp[as.character(gaia1$true_SourceType)], 
+	       col = c.tmp2[as.character(gaia1$true_SourceType)], axes = F, main = cu8class.str.all[ii],
+	       xlab = "", ylab = "")
+	map.grid(lim = c(0, 359.99, -90, 90), lty = 1, labels = F, col = 1)
+	}
+dev.off()
+@
+
+\begin{figure}
+\begin{center}
+
+\includegraphics{figures/SkymapClasswise.png}
+
+\end{center}
+\caption{Sky maps of the sources by class. }
+\label{fig:skymapClasswise}
+\end{figure}
+
+
+\subsection{Apparent magnitudes}
+
+<<label=figGMagHist, include=false, echo=false>>=
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 64, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 64, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 64, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 64, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 64, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 64, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 64, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 64, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 64, maxColorValue = 255))
+
+par(mfrow = c(1,2), mar = c(2.7,2.7,2,1), mgp = c(1.6,0.6,0), oma = c(0,0,2,0))
+
+#% G magnitude bins:
+b.tmp <- seq(min(gaia1$Gmag, na.rm = T), max(gaia1$Gmag, na.rm = T), length.out = 39)
+#% The regular DSC classes:
+h.tmp <- hist(gaia1$Gmag[gaia1$true_SourceType == cu8class.nums.all[5]], breaks = b.tmp,
+     col = tc.tmp[5], border = c.tmp[5], main = "Regular DSC classes", xlab = "G", ylab = "Count",
+     ylim = c(0,150000))
+for(ii in 6:9)
+   {
+    hist(gaia1$Gmag[gaia1$true_SourceType == cu8class.nums.all[ii]], breaks = b.tmp,
+          col = tc.tmp[ii], border = c.tmp[ii], main = cu8class.str.all[ii], add = T)
+    }
+legend(min(b.tmp), 150000, legend = cu8class.str.all[5:9], fill = tc.tmp[5:9],
+    border = c.tmp[5:9], bty = "n") 
+#% The peculiar classes:
+h.tmp <- hist(gaia1$Gmag[gaia1$true_SourceType == cu8class.nums.all[1]], breaks = b.tmp,
+     col = tc.tmp[1], border = c.tmp[1], main = "Peculiar classes", xlab = "G", ylab = "Count",
+     ylim = c(0,1300))
+for(ii in 3:4)
+   {
+    hist(gaia1$Gmag[gaia1$true_SourceType == cu8class.nums.all[ii]], breaks = b.tmp,
+          col = tc.tmp[ii], border = c.tmp[ii], main = cu8class.str.all[ii], add = T)
+    }
+legend(min(b.tmp), 1300, legend = cu8class.str.all[c(1,3,4)], fill = tc.tmp[c(1,3,4)],
+    border = c.tmp[c(1,3,4)], bty = "n", pt.cex = 2.5) 
+mtext("G", font = 2, line = 0.5, outer = T)
+@
+
+<<label=figBPMagHist, include=false, echo=false>>=
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 64, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 64, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 64, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 64, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 64, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 64, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 64, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 64, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 64, maxColorValue = 255))
+
+par(mfrow = c(1,2), mar = c(2.7,2.7,2,1), mgp = c(1.6,0.6,0), oma = c(0,0,2,0))
+
+#% BP magnitude bins:
+b.tmp <- seq(min(gaia1$Bpmag, na.rm = T), max(gaia1$Bpmag, na.rm = T), length.out = 39)
+#% The regular DSC classes:
+h.tmp <- hist(gaia1$Bpmag[gaia1$true_SourceType == cu8class.nums.all[5]], breaks = b.tmp,
+     col = tc.tmp[5], border = c.tmp[5], main = "Regular DSC classes", xlab = "BP", ylab = "Count",
+     ylim = c(0,150000))
+for(ii in 6:9)
+   {
+    hist(gaia1$Bpmag[gaia1$true_SourceType == cu8class.nums.all[ii]], breaks = b.tmp,
+          col = tc.tmp[ii], border = c.tmp[ii], main = cu8class.str.all[ii],  add = T)
+    }
+legend(min(b.tmp), 150000, legend = cu8class.str.all[5:9], fill = tc.tmp[5:9],
+    border = c.tmp[5:9], bty = "n") 
+#% The check classes:
+h.tmp <- hist(gaia1$Bpmag[gaia1$true_SourceType == cu8class.nums.all[1]], breaks = b.tmp,
+     col = tc.tmp[1], border = c.tmp[1], main = "Peculiar classes", xlab = "BP", ylab = "Count",
+     ylim = c(0,1300))
+for(ii in 3:4)
+   {
+    hist(gaia1$Bpmag[gaia1$true_SourceType == cu8class.nums.all[ii]], breaks = b.tmp,
+          col = tc.tmp[ii], border = c.tmp[ii], main = cu8class.str.all[ii], add = T)
+    }
+legend(min(b.tmp), 1300, legend = cu8class.str.all[c(1,3,4)], fill = tc.tmp[c(1,3,4)],
+    border = c.tmp[c(1,3,4)], bty = "n", pt.cex = 2.5) 
+mtext(expression(bold(G[BP])), font = 2, line = 0.5, outer = T)
+@
+
+<<label=figRPMagHist, include=false, echo=false>>=
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 64, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 64, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 64, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 64, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 64, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 64, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 64, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 64, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 64, maxColorValue = 255))
+
+par(mfrow = c(1,2), mar = c(2.7,2.7,2,1), mgp = c(1.6,0.6,0), oma = c(0,0,2,0))
+
+#% RP magnitude bins:
+b.tmp <- seq(min(gaia1$Rpmag, na.rm = T), max(gaia1$Rpmag, na.rm = T), length.out = 39)
+#% The regular DSC classes:
+h.tmp <- hist(gaia1$Rpmag[gaia1$true_SourceType == cu8class.nums.all[5]], breaks = b.tmp,
+     col = tc.tmp[5], border = c.tmp[5], main = "Regular DSC classes", xlab = "RP", ylab = "Count",
+     ylim = c(0,150000))
+for(ii in 6:9)
+   {
+    hist(gaia1$Rpmag[gaia1$true_SourceType == cu8class.nums.all[ii]], breaks = b.tmp,
+          col = tc.tmp[ii], border = c.tmp[ii], main = cu8class.str.all[ii],  add = T)
+    }
+legend(min(b.tmp), 150000, legend = cu8class.str.all[5:9], fill = tc.tmp[5:9],
+    border = c.tmp[5:9], bty = "n") 
+#% The check classes:
+h.tmp <- hist(gaia1$Rpmag[gaia1$true_SourceType == cu8class.nums.all[1]], breaks = b.tmp,
+     col = tc.tmp[1], border = c.tmp[1], main = "Peculiar classes", xlab = "RP", ylab = "Count",
+     ylim = c(0,1300))
+for(ii in 3:4)
+   {
+    hist(gaia1$Rpmag[gaia1$true_SourceType == cu8class.nums.all[ii]], breaks = b.tmp,
+          col = tc.tmp[ii], border = c.tmp[ii], main = cu8class.str.all[ii], add = T)
+    }
+legend(min(b.tmp), 1300, legend = cu8class.str.all[c(1,3,4)], fill = tc.tmp[c(1,3,4)],
+    border = c.tmp[c(1,3,4)], bty = "n", pt.cex = 2.5) 
+mtext(expression(bold(G[RP])), font = 2, line = 0.5, outer = T)
+@
+
+\begin{figure}[H]
+\begin{center}
+<<label=fig:GMagHist,fig=TRUE,echo=FALSE, height=3.2, width=10>>=
+<<figGMagHist>>
+<<label=fig:BPMagHist,fig=TRUE,echo=FALSE, height=3.2, width=10>>=
+<<figBPMagHist>>
+<<label=fig:RPMagHist,fig=TRUE,echo=FALSE, height=3.2, width=10>>=
+<<figRPMagHist>>
+@
+\end{center}
+\caption{Distribution of the magnitude $G$ (top row), $G_{BP}$ (middle row) and $G_{RP}$ (bottom row). The left column shows the regular DSC classes, the right column, those with multiple true labels.}
+\label{fig:MagHist}
+\end{figure}
+
+
+\subsection{Proper motions}
+
+<<label=figPmHist, include=false, echo=false>>=
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c(
+    '-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 64, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 64, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 64, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 64, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 64, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 64, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 64, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 64, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 64, maxColorValue = 255))
+
+par(mfrow = c(4,2), mar = c(2.7,2.7,2,1), mgp = c(1.6,0.6,0), oma = c(0,0,2,0))
+
+for(ii in c(5:9,1,3,4))
+   {
+	hist(gaia1$pm[gaia1$true_SourceType == cu8class.names.all[ii]], breaks = 
+	   seq(0, 8100, by = 0.81), xlim = c(0,100), col = tc.tmp[cu8class.names.all[ii]], 
+	   border = c.tmp[cu8class.names.all[ii]], xlab = "Proper motion",
+	   ylab = "Counts", main = cu8class.str.all[ii]) 
+   }
+@
+
+\begin{figure}[H]
+\begin{center}
+<<label=fig:PmHist,fig=TRUE,echo=FALSE, height=12, width=10>>=
+<<figPmHist>>
+@
+\end{center}
+\caption{Class-wise distribution of the proper motions in the validation set.}
+\label{fig:PmHist}
+\end{figure}
+
+Figure \ref{fig:PmHist} shows the distribution of the proper motions $\sqrt{\mu_\alpha^2 \cos^2 \delta + \mu_\delta^2}$ of the validation objects by class. 
+\begin{itemize}
+\item The distribution of the stars and binaries, as expected, are very similar. However, both appears to be composed of (at least) two unimodal populations, one narrowly concentrated at around 3 mas/year and another one, more spreadout, around 7 mas/year. These roughly correspond to two important sources of validation objects, the former to the variable star catalog of D. W. Kim \citep{} containing Magellanic Cloud objects, the latter to the broad general sample from Simbad.
+\item White dwarfs (and the related classes WD--M dwarf and WD--main sequence star binaries) have on average high proper motion and a broad proper motion distribution, due to the fact that these mostly faint objects are observable only relatively close to Earth.
+\item The narrower distribution of the cataclysmic variables might be due to an observing bias: their luminous state makes them detectable at larger distances.
+\item Quasars have on average low proper motion (distribution peaking below 2 mas/year).
+\item Galaxies, although in theory they should have a distribution similar to quasars, have on average higher proper motion and a broader distribution than quasars. Their extended morphology causes difficulties in their astrometric processing.
+\item In the distribution of galaxies, cataclysmic variables and WD--main sequence star binaries, there is an excess of objects with near-zero proper motion. In majority, they seem to have exactly 0 values in the DR2 tables. 
+\end{itemize}
+
+
+\subsection{Colour-magnitude diagrams} \label{subsec:cmd}
+
+<<fig=FALSE,echo=FALSE,results=hide>>=
+png("figures/CMD.png", height=1200, width=1200, pointsize=20)
+
+p.tmp <- c('-4' = 16, '-3' = 1, '-2' = 2,  '-1' = 2, '0' = 3, '1' = 17, '2' = 8, '4' = 18, '5' = 16)
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 127, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 127, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 127, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 127, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 127, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 127, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 127, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 127, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 127, maxColorValue = 255))
+x.tmp <- c('-4' = 0.4, '-3' = 0.2, '-2' = 0.25,  '-1' = 0.25, '0' = 0.25, '1' = 0.4, '2' = 0.25, '4' = 0.5, '5' = 0.4)
+
+par(oma = c(2,2,0,0))
+layout(matrix(1:9, ncol = 3, byrow = T), height = c(1,1,1.2), width = c(1.2,1,1))
+ind.tmp <- c(5:9,1,3,4)
+for(ii in 1:8)
+   {
+	if(is.element(ii, c(1,4))) {par(mar = c(0,2.7,0,0), mgp = c(1.6,0.6,0))}
+	if(ii == 8) {par(mar = c(2.7,0,0,0), mgp = c(1.6,0.6,0))}
+	if(ii == 7) {par(mar = c(2.7,2.7,0,0), mgp = c(1.6,0.6,0))}
+	if(is.element(ii, c(2,3,5,6))) {par(mar = c(0,0,0,0), mgp = c(1.6,0.6,0))}
+	hist2d(x = gaia1$Bpmag - gaia1$Rpmag, y = gaia1$Gmag, 
+	   col = c("white", gray(((15:0)/20))), FUN = function(vec) {log(length(vec)+1)},
+	   xlab = "", ylab = "", nbin = 100, axes = F, xaxs = "r", yaxs = "r",
+	   ylim = rev(range(gaia1$Gmag)))
+	points(gaia1$Bpmag[gaia1$true_SourceType == cu8class.nums.all[ind.tmp[ii]]] -
+	   gaia1$Rpmag[gaia1$true_SourceType == cu8class.nums.all[ind.tmp[ii]]],
+	   gaia1$Gmag[gaia1$true_SourceType == cu8class.nums.all[ind.tmp[ii]]], 
+	   pch = p.tmp[cu8class.names.all[ind.tmp[ii]]], 	
+	   cex = x.tmp[cu8class.names.all[ind.tmp[ii]]], 
+	   col = tc.tmp[cu8class.names.all[ind.tmp[ii]]])
+	box()
+	if(is.element(ii, c(1,4,7))) {axis(2)}
+	if(is.element(ii, c(7,8))) {axis(1)}
+	text(x = min(gaia1$Bpmag - gaia1$Rpmag, na.rm = T), y = min(gaia1$Gmag, na.rm = T),
+	   labels = cu8class.str.all[ind.tmp[ii]], pos = 4)
+   }
+mtext(expression(G[BP] - G[RP]), side = 1, line = 0.5, outer = T)
+mtext("G", side = 2, line = 0.5, outer = T)
+dev.off()
+@
+
+\begin{figure}[H]
+\begin{center}
+
+\includegraphics{figures/CMD.png}
+
+\end{center}
+\caption{The class-wise colour-magnitude diagram of the validation data set, using the $G$ magnitude versus the $G_{BP} - G_{RP}$ colour. The grey background 2D histogram shows the complete validation data set where the greyscale corresponds to counts on logarithmic scale. The classes are highlighted in colour.}
+\label{fig:CMD}
+\end{figure}
+
+Figure \ref{fig:CMD} shows the validation set on the $(G_{BP} - G_{RP}, G)$ colour-magnitude diagram. This, too, reflects the choice of catalogs used for validation set construction.
+
+The extended horizontal stripe at $G$ magnitudes fainter than 20.5 is in majority composed of \Sexpr{sum(gaia0$true_SourceType == 4 & gaia0$Gmag > 20.5 & is.element(gaia0$origin, c("CU7_DGDREQ44_ALLWISE", "random_SDSS_DR12", "top300000_SDSS_DR14_qso")))} quasars (\Sexpr{sum(gaia0$true_SourceType == 4 & gaia0$Gmag > 20.5 & is.element(gaia0$origin, c("CU7_DGDREQ44_ALLWISE")))} from AllWise and \Sexpr{sum(gaia0$true_SourceType == 4 & gaia0$Gmag > 20.5 & is.element(gaia0$origin, c("random_SDSS_DR12", "top300000_SDSS_DR14_qso")))} from SDSS DR14), and of \Sexpr{sum(gaia0$true_SourceType == 5 & gaia0$Gmag > 20.5 & is.element(gaia0$origin, c("top300000_SDSS_DR14_gal")))} galaxies from SDSS.
+
+Figure \ref{fig:CMD} also shows predominantly class 0 (single star) objects with colours redder than $G_{BP} - G_{RP} = 5$. Other types of objects are rare with this colour. Upon examination, the single stars in this region turn out to come from the general selection from Simbad (from the two stripes visible in the top left panel of Fig. \ref{fig:skymapClasswise}). About two-third of them have no detailed type information there (other than they are stellar objects), some have detected variability without further specification, and some are candidate or confirmed long-period variables. We find only very few binaries with such colours, although all binary systems with no contradictory classifications in Simbad were included in the validation set.
+
+
+\section{DSC performance on ``regular'' classes} \label{sec:regularcl}
+
+This section presents the results of DSC on those objects that can be labeled unambiguously as one of DSC's standard classes: star, white dwarf, physical binary, quasar or galaxy.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Further plots:
+%  - misclassification rate and probability of true class as a function of sky position, parallax
+%  - everything also for the non-standard classes (cataclysmic, CU7 QSO, WD-Mdw and WD-MS binary) 
+%    and for the other funny classes such as the T Tau stars, planetary nebulae etc;
+%    plus analysis how their classification into "good" (WD or star or binary) class depends on their 
+%    colour, Gmag, size of proper motion, galactic coordinates,...
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\subsection{ExtraTree classifier based on BP-RP spectra} \label{subsec:regularcl:ets}
+
+The Extremely Randomised Trees algorithm (ET or ExtraTrees), based on the middle wavelength ranges of the mean BP and RP spectra, predicts class labels using an ensemble of 1000 random trees. The 24 edge pixels from both ends of both the BP and RP spectrum were discarded, and then the remaining twice 72 pixels were normalised to have unit sum. No other information has been used in this classifier than this normalised spectrum. Neither integrated magnitudes, nor parallax or proper motion have been used; two other classifiers are based on these features, whose output can hence be regarded as independent from that of the photometry-based ET. 
+
+\subsubsection{Confusion matrix} \label{subsubsec:regularcl:etsconfmat}
+
+\setkeys{Gin}{width=0.8\textwidth}
+
+<<label=figETSConfMat, include=false, echo=false>>=
+confmat.tmp <- table(factor(gaia1$true_SourceType, levels = c(-4,-2,-1,0,1,2,4,5)),
+   factor(gaia1$ets.class, levels = c(0,1,2,4,5)), useNA = "n")[4:8,]
+dimnames(confmat.tmp) <- list(cu8class.str, cu8class.str)
+namat.tmp <- matrix(table(factor(gaia1$true_SourceType, levels = c(-4,-2,-1,0,1,2,4,5)),
+   factor(gaia1$ets.class, levels = c(0,1,2,4,5)), useNA = "i")[4:8,6],
+   ncol = 1)
+dimnames(namat.tmp) <- list(cu8class.str, "NA")
+#quartz(width = 6, height = 2.8)
+layout(matrix(1:2, ncol = 2), width = c(7,1))
+par(mar = c(0.5,5,3.5,0.5)) 
+matPlot.fun(confmat.tmp, need.xlabs = T, need.ylabs = T)
+par(mar = c(2.2,0,3.5,0.5)) 
+tablePlot.fun(namat.tmp, need.xlabs = T, need.ylabs = F)
+@
+
+\begin{figure}
+\begin{center}
+<<label=fig:ETSConfMat,fig=TRUE,echo=FALSE, height=2.8, width=6>>=
+<<figETSConfMat>>
+@
+\end{center}
+\caption{The confusion matrix, contamination and error rates and account of NAs from the ExtraTree classifier based on BP/RP spectra. Rows correspond to true class, columns to predicted class. In the upper left $5 \times 5$ block, as well as in the account of NAs, counts are given. The column corresponding to errors and the row corresponding to contamination (both orange-shaded according to quality) shows fractions.}
+\label{fig:ETSConfMat}
+\end{figure}
+
+The performance of the ET is shown in Fig. \ref{fig:ETSConfMat}. The misclassification rate is the lowest in the galaxy class (about 4\%), and 10\% among quasars, which implies that DSC classification output can be used to select these two object types by downstream modules. Further aid to select samples of galaxies and quasars with the desired purity/contamination balance is given in Section \ref{subsubsec:puritycompl}.
+
+There is an extensive confusion between physical binaries and single stars. This is at least partly as expected, since it is in part due to a genuine similarity between some binaries and the single stars, which limits the potential of DSC to distinguish between single and multiple star systems. The correct identification is possible for those binaries that consist of two sufficiently different spectral types with not too great a difference in luminosity (so that the shape of the BP and RP spectra of the system is noticeably different from that of a single star), or where the spectral shapes of the components are similar, but the system is detectably brighter than would correspond to its spectral type. Only the former is feasible for the present-state ET classifier, since the latter would require the inclusion of a good estimation of the absolute luminosity of the system, which in turn needs reliable parallaxes for all objects (including all object types, and faint or extended objects too). 
+
+Further work is necessary to investigate precisely what subset of binaries can be reliably distinguished based on the shape of their BP/RP spectra. For this, I see two principal ways: (i) to simulate binaries; (ii) to use the present results to select those binaries that have been successfully classified as binaries, and from these, create iteratively a self-consistent subset that is reliably distingushed from single stars. The present validation set contains a very broad variety of binaries, ranging from spectroscopic or double-lined binaries to eclipsing binaries with components of very different luminosity, but most often without sufficient individual information of the components. A manual selection of a large enough sample of binaries with well-known physical parameters requires a lot of time, and does not seem to be the most fruitful way to go.
+
+A contribution to the low performance of ET on binaries can come from the fact that training labels, supposed to be known, can  easily be erroneous. For instance, the general star sample from Simbad can contain many objects that have not been detected as binaries simply because not yet investigated spectroscopically. This, while obviously affecting the classification quality through the incorrect training labels, raises the interesting question: could some of these assumed stars, apparently misclassified as binaries, be in truth undetected binaries? 
+
+
+\subsubsection{Classification probability vectors} \label{subsubsec:regularcl:etsprobvec}
+
+\setkeys{Gin}{width=1\textwidth}
+
+<<fig=FALSE,echo=FALSE,results=hide>>=
+png("figures/EtsProbVectors5by5.png", height=750, width=1200, pointsize=20)
+
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 64, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 64, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 64, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 64, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 64, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 64, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 64, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 64, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 64, maxColorValue = 255))
+
+par(oma = c(2,2,0,0))
+layout(matrix(1:25, nrow = 5, byrow = T), height = c(1,1,1,1,1.25), width = c(1.2,1,1,1,1))
+for(ii in 1:5)       # index over estimated label
+ for(jj in 1:5)      # index over true label
+   {
+	if(ii == 5) {mar1 <- 2.6; xlab.tmp <- "Class"} else {mar1 <- 0.1; xlab.tmp <- ""} 
+	if(jj == 1) {mar2 <- 2.6; ylab.tmp <- "Probability"} else {mar2 <- 0.1; ylab.tmp <- ""} 
+	par(mar = c(mar1,mar2,0.1,0.1), mgp = c(1.6,0.6,0))
+   	n.tmp <- sum(gaia1$ets.class == cu8class.nums[ii] &
+   	   gaia1$true_SourceType == cu8class.nums[jj], na.rm = T)
+   	if(n.tmp > 0)
+   	   {
+   		i.tmp <- sample(which(gaia1$ets.class == cu8class.nums[ii] & 
+   		   gaia1$true_SourceType == cu8class.nums[jj]), 
+   		   size = min(500, sum(gaia1$ets.class == cu8class.nums[ii] & 
+   		   gaia1$true_SourceType == cu8class.nums[jj], na.rm = T)))
+		l.tmp <- as.character(gaia1$true_SourceType[i.tmp])
+		plot(1:5, gaia1[i.tmp[1], paste0("etsprob", c(0:2,4,5))], axes = F,
+		   type = "l", col = tc.tmp[l.tmp[1]], ylim = c(0,1), xlab = xlab.tmp,
+		   ylab = ylab.tmp, cex = 1.2)
+		box()
+		if(ii == 5) axis(1, at = 1:5, labels = cu8class.names)
+		if(jj == 1) axis(2)
+		for(jj in 2:length(i.tmp))
+		   {
+		   	lines(1:5, gaia1[i.tmp[jj], paste0("etsprob", c(0:2,4,5))], col = tc.tmp[l.tmp[jj]])
+		   }
+	   } else {
+		plot(1:5, gaia1[i.tmp[1], paste0("etsprob", c(0:2,4,5))], axes = F,
+		   type = "n", ylim = c(0,1), xlab = xlab.tmp, ylab = ylab.tmp, cex = 1.2)
+		box()
+		if(ii == 5) axis(1, at = 1:5, labels = cu8class.names)
+		if(jj == 1) axis(2)
+	   }
+   }
+mtext("True class", side = 1, line = 0.6, outer = T, font = 2)
+mtext("Estimated class", side = 2, line = 0.6, outer = T, font = 2)
+dev.off()
+@
+
+\begin{figure}[H]
+\begin{center}
+
+\includegraphics{figures/EtsProbVectors5by5.png}
+
+\end{center}
+\caption{The probability vectors produced by the ET classifier, for a sample of at most 500 objects of each combination of true and estimated class. The true class is colour-coded (the same as in Figure \ref{fig:skymapClasswise}), and is arranged by column (leftmost column: stars, second from left: white dwarfs, middle: binaries, fourth: quasars, rightmost: galaxies). Rows correspond to estimated classes (top: predicted star, second from top: predicted white dwarf, middle: predicted binary, fourth: predicted  quasar, fifth: predicted galaxy). Correctly classified objects thus are shown in the diagonal.}
+\label{fig:EtsProbVectors5by5}
+\end{figure}
+
+Figure \ref{fig:EtsProbVectors5by5} shows the output probability vectors, arranged in a grid of rows corresponding to true classes, columns to predicted classes.
+
+Its left and middle panels in the top and middle rows suggest a similarity between the probability vectors of single and binary stars. Objects in these panels, namely, binaries and stars that were classified either to be stars or binaries (not necessarily correctly), most often have a general shape with two high probability values at the star and the binary class and near-zero values everywhere else. This seems to confirm that there is a continuous transition between systems detectably binary and both single stars and undetectable binaries, but all these objects can be quite reliably distinguished from white dwarfs, quasars or galaxies.
+
+Correctly classified stars (top left panel) appear to have higher probability values for the class star than quasars or galaxies misclassified as stars (top row, two rightmost panels). Similarly, the probability of being a quasar for a real quasar is higher than the probability of being a quasar for a star misclassified as quasar. The same is true for white dwarfs or galaxies. In other words, generally, the probability of the modal class is on average higher when the modal class is the correct one than when the modal class is wrong, at least for stars, white dwarfs, quasars and galaxies. This implies that by a cut put on classification probability, we can remove part of the contamination from these predicted classes. This appears to be much less so for binaries: for both true binaries and stars misclassified as binaries, the probability for class binary seems to be high, though at the highest levels, there is some difference. This emphasizes further the difficulties of discriminating binaries and single stars. Section \ref{subsubsec:puritycompl} will provide a further look into this.
+
+
+
+\subsubsection{Class probabilities vs. $G$}
+
+<<fig=FALSE,echo=FALSE,results=hide>>=
+
+png("figures/EtsProbsVsG5by5.png", height=1200, width=1200, pointsize=20)
+p.tmp <- c('-4' = 16, '-3' = 1, '-2' = 2,  '-1' = 2, '0' = 3, '1' = 17, '2' = 8, '4' = 18, '5' = 16)
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+x.tmp <- c('-4' = 0.4, '-3' = 0.2, '-2' = 0.25,  '-1' = 0.25, '0' = 0.25, '1' = 0.4, '2' = 0.25, '4' = 0.5, '5' = 0.4)
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 64, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 64, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 64, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 64, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 64, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 64, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 64, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 64, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 64, maxColorValue = 255))
+
+i.lst <- lapply(1:5, function(kk) 
+   sample(which(gaia1$true_SourceType == cu8class.nums[kk]), size = min(2000,
+	   sum(gaia1$true_SourceType == cu8class.nums[kk]))))
+par(oma = c(2,2,0,0))
+layout(matrix(1:25, nrow = 5, byrow = T), height = c(1,1,1,1,1.25), width = c(1.2,1,1,1,1))
+for(ii in 1:5)       # index over estimated label
+ for(jj in 1:5)      # index over true label
+   {
+	if(ii == 5) {mar1 <- 2.6; xlab.tmp <- cu8class.str[jj]} else {mar1 <- 0.1; xlab.tmp <- ""} 
+	if(jj == 1) {mar2 <- 2.6; ylab.tmp <- paste0("Prob.of class ", cu8class.nums[ii])} else {mar2 <- 0.1; ylab.tmp <- ""} 
+	par(mar = c(mar1,mar2,0.1,0.1), mgp = c(1.6,0.6,0))
+   	n.tmp <- sum(gaia1$ets.class == cu8class.nums[ii], na.rm = T)
+	a.tmp <- sample(1:nrow(gaia1), size = 20000) 
+  	i.tmp <- i.lst[[jj]]
+   	if(n.tmp > 0)
+   	   {
+		l.tmp <- as.character(gaia1$true_SourceType[i.tmp])
+		plot(gaia1$Gmag[a.tmp], gaia1[a.tmp, paste0("etsprob", cu8class.nums[ii])], axes = F,
+		   pch = 16, cex = 0.3, col = "lightgrey", ylim = c(0,1), xlab = xlab.tmp,
+		   ylab = ylab.tmp, xlim = c(6,23))
+		box()
+		if(ii == 5) axis(1)
+		if(jj == 1) axis(2)
+		points(gaia1$Gmag[i.tmp], gaia1[i.tmp, paste0("etsprob", cu8class.nums[ii])], 
+		   col = c.tmp[l.tmp[jj]], pch = 16, cex = 0.4)
+	   } else {
+		plot(gaia1$Gmag[a.tmp], gaia1[a.tmp, paste0("etsprob", cu8class.nums[ii])], axes = F,
+		   type = "n", ylim = c(0,1), xlab = xlab.tmp, ylab = ylab.tmp, cex = 0.3, xlim = c(6,23))
+		box()
+		if(ii == 5) axis(1)
+		if(jj == 1) axis(2)
+	   }
+   }
+mtext("Magnitude G", side = 1, line = 0.6, outer = T, font = 1)
+mtext("Probability", side = 2, line = 0.6, outer = T, font = 1)
+dev.off()
+@
+
+\begin{figure}[H]
+\begin{center}
+
+\includegraphics{figures/EtsProbsVsG5by5.png}
+
+\end{center}
+\caption{Probabilities produced by the ExtraTree classifier based on BP/RP spectra, for a sample of at most 2000 objects of each (true) class, as a function of apparent $G$ magnitude. Each column contains results for a (true) DSC class (leftmost: stars, second: white dwarfs, middle: physical binaries, fourth: quasars, fifth: galaxies). The true class is also indicated by colour, according to the colour code used throughout this document. The uppermost row shows the star probability by ET, the second row from top, white dwarf probability, the third, physical binary probability, the fourth, quasar probability,  and the bottom row, galaxy probability. The grey dots show the full test set, for comparison.}
+\label{fig:EtsProbsVsG5by5}
+\end{figure}
+
+Figure \ref{fig:EtsProbsVsG5by5} confirms that for stars, white dwarfs, galaxies and quasars, class probabilities are the highest when correct: in panels in the diagonal, which show the probability values for the correct class, the coloured dots are at much higher levels than in the other panels showing the probabilities for incorrect classes.  The exception is the probabilities for class binary when stars are misidentified as binaries: in the leftmost panel of the middle row, showing this case, we find a cloud of bright stars at high binary probability (left upper quadrant of the panel). These objects represent the majority of the contamination in the estimated binary class, although other stars (fainter and with lower modal probability) also contribute.
+
+Bright objects, which are almost exclusively stars and binaries (galactic sources), appear to have high probabilities only on the classes binary and star. It appears the classifier learnt the simple rule that ``if it is bright, then it is a star or a binary'', even though there is no direct information about the absolute brightness of the object among the inputs to the ET classifier. This information can come through indirectly: brighter objects have smoother spectra with higher SNR, which can be detectable by the classifier. Distinction between stars and binaries among these bright objects is, however, not good, as mentioned above and illustrated in the leftmost panel of the middle row of Fig. \ref{fig:EtsProbsVsG5by5}.
+
+
+\subsubsection{Class probabilities vs. $G_{BP} - G_{BP}$}
+
+<<fig=FALSE,echo=FALSE,results=hide>>=
+png("figures/EtsProbsVsBpRp5by5.png", height=1200, width=1200, pointsize=20)
+
+p.tmp <- c('-4' = 16, '-3' = 1, '-2' = 2,  '-1' = 2, '0' = 3, '1' = 17, '2' = 8, '4' = 18, '5' = 16)
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+x.tmp <- c('-4' = 0.4, '-3' = 0.2, '-2' = 0.25,  '-1' = 0.25, '0' = 0.25, '1' = 0.4, '2' = 0.25, '4' = 0.5, '5' = 0.4)
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 64, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 64, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 64, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 64, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 64, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 64, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 64, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 64, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 64, maxColorValue = 255))
+
+par(oma = c(2,2,0,0))
+layout(matrix(1:25, nrow = 5, byrow = T), height = c(1,1,1,1,1.25), width = c(1.2,1,1,1,1))
+i.lst <- lapply(1:5, function(kk) 
+   sample(which(gaia1$true_SourceType == cu8class.nums[kk]), size = min(2000,
+	   sum(gaia1$true_SourceType == cu8class.nums[kk]))))
+for(ii in 1:5)       # index over estimated label
+ for(jj in 1:5)      # index over true label
+   {
+	if(ii == 5) {mar1 <- 2.6; xlab.tmp <- cu8class.str[jj]} else {mar1 <- 0.1; xlab.tmp <- ""} 
+	if(jj == 1) {mar2 <- 2.6; ylab.tmp <- paste0("Prob.of class ", cu8class.nums[ii])} else {mar2 <- 0.1; ylab.tmp <- ""} 
+	par(mar = c(mar1,mar2,0.1,0.1), mgp = c(1.6,0.6,0))
+   	n.tmp <- sum(gaia1$ets.class == cu8class.nums[ii], na.rm = T)
+	a.tmp <- sample(1:nrow(gaia1), size = 20000) 
+  	i.tmp <- i.lst[[jj]]
+   	if(n.tmp > 0)
+   	   {
+		l.tmp <- as.character(gaia1$true_SourceType[i.tmp])
+		plot(gaia1$Bpmag[a.tmp] - gaia1$Rpmag[a.tmp], gaia1[a.tmp, paste0("etsprob", cu8class.nums[ii])], axes = F,
+		   pch = 16, cex = 0.3, col = "lightgrey", ylim = c(0,1), xlab = xlab.tmp,
+		   ylab = ylab.tmp, xlim = c(-5,7))
+		box()
+		if(ii == 5) axis(1)
+		if(jj == 1) axis(2)
+		points(gaia1$Bpmag[i.tmp] - gaia1$Rpmag[i.tmp], gaia1[i.tmp, paste0("etsprob", cu8class.nums[ii])], 
+		   col = c.tmp[l.tmp[jj]], pch = 16, cex = 0.4)
+	   } else {
+		plot(gaia1$Bpmag[a.tmp] - gaia1$Rpmag[a.tmp], gaia1[a.tmp, paste0("etsprob", cu8class.nums[ii])], axes = F,
+		   type = "n", ylim = c(0,1), xlab = xlab.tmp, ylab = ylab.tmp, cex = 0.3, xlim = c(-5,7))
+		box()
+		if(ii == 5) axis(1)
+		if(jj == 1) axis(2)
+	   }
+   }
+mtext(expression(G[BP] - G[RP]), side = 1, line = 0.6, outer = T, font = 1)
+mtext("Probability", side = 2, line = 0.6, outer = T, font = 1)
+dev.off()
+@
+
+\begin{figure}[H]
+\begin{center}
+
+\includegraphics{figures/EtsProbsVsBpRp5by5.png}
+
+\caption{Probabilities produced by the ExtraTree classifier based on BP/RP spectra, for a sample of at most 2000 objects of each (true) class, as a function of $G_{BP} - G_{RP}$. Each column contains results for a regular class (leftmost: stars, second: white dwarfs, middle: physical binaries, fourth: quasars, fifth: galaxies). The true class is also colour-coded. The uppermost row shows the ETS probability for class star for the objects; the second row from top, for class white dwarf; the third, for class physical binary; the fourth, for class quasar; and the bottom row, for class galaxy. The grey dots show the full test set, for comparison.}
+\label{fig:EtsProbsVsBpRp5by5}
+
+\end{center}
+\end{figure}
+
+The colour dependence of the classification probabilities is shown in Fig. \ref{fig:EtsProbsVsBpRp5by5}. As was concluded from Fig. \ref{fig:CMD} in Section \ref{subsec:cmd}, the reddest objects in the DSC validation set are all stars. Fig. \ref{fig:EtsProbsVsBpRp5by5} suggests that the classifier learnt this (see its leftmost column), which implies that when applied to real data possibly containing red binaries, these might be missed using this model. 
+
+For white dwarfs, it is interesting to observe that the probabilities of the (correct) white dwarf class are increasing with bluer colour (second diagonal panel from top), which makes sense: the bluer the object, the more likely it is to be a white dwarf according to the classifier. Still among the white dwarfs (second row from top), the probabilities for other (wrong) classes behave the opposite way: the redder the white dwarf, the higher the probability is for an incorrect classification, suggesting that the ET classifier can learn to use correctly important features in the data.
+
+
+\subsubsection{Class probabilities vs. astrometry}
+
+<<fig=FALSE,echo=FALSE,results=hide>>=
+png("figures/EtsProbsVsPm5by5.png", height=1200, width=1200, pointsize=20)
+p.tmp <- c('-4' = 16, '-3' = 1, '-2' = 2,  '-1' = 2, '0' = 3, '1' = 17, '2' = 8, '4' = 18, '5' = 16)
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+x.tmp <- c('-4' = 0.4, '-3' = 0.2, '-2' = 0.25,  '-1' = 0.25, '0' = 0.25, '1' = 0.4, '2' = 0.25, '4' = 0.5, '5' = 0.4)
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 64, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 64, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 64, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 64, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 64, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 64, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 64, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 64, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 64, maxColorValue = 255))
+
+i.lst <- lapply(1:5, function(kk) 
+   sample(which(gaia1$true_SourceType == cu8class.nums[kk]), size = min(2000,
+	   sum(gaia1$true_SourceType == cu8class.nums[kk]))))
+par(oma = c(2,2,0,0))
+layout(matrix(1:25, nrow = 5, byrow = T), height = c(1,1,1,1,1.25), width = c(1.2,1,1,1,1))
+for(ii in 1:5)       # index over estimated label
+ for(jj in 1:5)      # index over true label
+   {
+	if(ii == 5) {mar1 <- 2.6; xlab.tmp <- cu8class.str[jj]} else {mar1 <- 0.1; xlab.tmp <- ""} 
+	if(jj == 1) {mar2 <- 2.6; ylab.tmp <- paste0("Prob.of class ", cu8class.nums[ii])} else {mar2 <- 0.1; ylab.tmp <- ""} 
+	par(mar = c(mar1,mar2,0.1,0.1), mgp = c(1.6,0.6,0))
+   	n.tmp <- sum(gaia1$ets.class == cu8class.nums[ii], na.rm = T)
+	a.tmp <- sample(1:nrow(gaia1), size = 20000) 
+  	i.tmp <- i.lst[[jj]]
+   	if(n.tmp > 0)
+   	   {
+		l.tmp <- as.character(gaia1$true_SourceType[i.tmp])
+		plot(gaia1$pm[a.tmp], gaia1[a.tmp, paste0("etsprob", cu8class.nums[ii])], axes = F,
+		   pch = 16, cex = 0.3, col = "lightgrey", ylim = c(0,1), xlab = xlab.tmp,
+		   ylab = ylab.tmp, xlim = c(0, 150))
+		box()
+		if(ii == 5) axis(1)
+		if(jj == 1) axis(2)
+		points(gaia1$pm[i.tmp], gaia1[i.tmp, paste0("etsprob", cu8class.nums[ii])], 
+		   col = c.tmp[l.tmp[jj]], pch = 16, cex = 0.4)
+	   } else {
+		plot(gaia1$pm[a.tmp], gaia1[a.tmp, paste0("etsprob", cu8class.nums[ii])], axes = F,
+		   type = "n", ylim = c(0,1), xlab = xlab.tmp, ylab = ylab.tmp, cex = 0.3, xlim = c(0, 150))
+		box()
+		if(ii == 5) axis(1)
+		if(jj == 1) axis(2)
+	   }
+   }
+mtext("Proper motion", side = 1, line = 0.6, outer = T, font = 1)
+mtext("Probability", side = 2, line = 0.6, outer = T, font = 1)
+dev.off()
+@
+
+\begin{figure}[H]
+\begin{center}
+
+\includegraphics{figures/EtsProbsVsPm5by5.png}
+
+\caption{Probabilities produced by the ExtraTree classifier based on BP/RP spectra, for a sample of at most 2000 objects of each (true) class, as a function of proper motion. Each column contains results for a regular class (leftmost: stars, second: white dwarfs, middle: physical binaries, fourth: quasars, fifth: galaxies). The true class is also colour-coded. The uppermost row shows the ET probability for class star for the objects, the second row from top, for class white dwarf, the third, for class physical binary, the fourth, for class quasar,  and the bottom row, for class galaxy. The grey dots show a mixture of all classes, for comparison.}
+\label{fig:EtsProbsVsPm5by5}
+
+\end{center}
+\end{figure}
+
+Figure \ref{fig:EtsProbsVsPm5by5} shows the probability values on the different classes as a function of proper motion. Apart from reflecting the fact that galactic objects can have on average the highest proper motions, galaxies stay at lower proper motion values, and the pointlike quasars have the smallest values, no interesting further structure can be discerned in the plots. We expect the photometry-based results to be largely independent from proper motions. All clustering in these plots would indicate conditional dependence, and possibly a training set bias: the dominance of a group of specific objects with specific proper motions in the training set.
+
+
+\subsubsection{Colour-magnitude diagrams of predicted classes}
+
+<<fig=FALSE,echo=FALSE,results=hide>>=
+
+png("figures/CMDByPred.png", height=1200, width=1200, pointsize=20)
+
+p.tmp <- c('-4' = 16, '-3' = 1, '-2' = 2,  '-1' = 2, '0' = 3, '1' = 17, '2' = 8, '4' = 18, '5' = 16)
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 100, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 100, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 100, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 100, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 100, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 100, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 100, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 100, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 100, maxColorValue = 255))
+x.tmp <- c('-4' = 0.4, '-3' = 0.2, '-2' = 0.25,  '-1' = 0.25, '0' = 0.25, '1' = 0.4, '2' = 0.25, '4' = 0.5, '5' = 0.4)
+
+par(oma = c(2,2,0,0))
+layout(matrix(1:15, ncol = 3, byrow = T), height = c(1,1,1,1,1.2), width = c(1.2,1,1))
+ind.tmp <- c(5:9,1,3,4)
+for(ii in 1:5)
+   {
+	if(ii == 5) {mar1.tmp <- 2.7}
+	if(is.element(ii, 1:4)) {mar1.tmp <- 0}
+	## The position in the CMD of the true class:
+	par(mar = c(mar1.tmp,2.7,0,0), mgp = c(1.6, 0.6, 0))
+	hist2d(x = gaia1$Bpmag - gaia1$Rpmag, y = gaia1$Gmag, 
+	   col = c("white", gray(((15:0)/20))), FUN = function(vec) {log(length(vec)+1)},
+	   xlab = "", ylab = "", nbin = 100, axes = F, xaxs = "r", yaxs = "r",
+	   ylim = rev(range(gaia1$Gmag)))
+	cond.tmp <- gaia1$true_SourceType == cu8class.nums.all[ind.tmp[ii]]
+	points(gaia1$Bpmag[cond.tmp] - gaia1$Rpmag[cond.tmp],  gaia1$Gmag[cond.tmp], 
+	   cex = 0.4, col = tc.tmp[cu8class.names.all[ind.tmp[ii]]])
+	text(-12, 5, label = paste0("All \n", cu8class.str.all[ind.tmp[ii]]), pos = 4)
+	box()
+	axis(2)
+	if(ii == 5) {axis(1)}
+	## Only the well-classified objects:
+	par(mar = c(mar1.tmp,0,0,0), mgp = c(1.6, 0.6, 0))
+	hist2d(x = gaia1$Bpmag - gaia1$Rpmag, y = gaia1$Gmag, 
+	   col = c("white", gray(((15:0)/20))), FUN = function(vec) {log(length(vec)+1)},
+	   xlab = "", ylab = "", nbin = 100, axes = F, xaxs = "r", yaxs = "r",
+	   ylim = rev(range(gaia1$Gmag)))
+	cond.tmp <- gaia1$true_SourceType == cu8class.nums.all[ind.tmp[ii]] & 
+	   gaia1$ets.class == cu8class.nums.all[ind.tmp[ii]] & !is.na(gaia1$ets.class)
+	points(gaia1$Bpmag[cond.tmp] - gaia1$Rpmag[cond.tmp],  gaia1$Gmag[cond.tmp], 
+	   cex = 0.4, col = tc.tmp[cu8class.names.all[ind.tmp[ii]]])
+	text(-12, 5, label = paste0("Correct cl. \n", cu8class.str.all[ind.tmp[ii]]), pos = 4)
+	box()
+	if(ii == 5) {axis(1)}
+	## Only the incorrectly classified objects:
+	par(mar = c(mar1.tmp,0,0,0), mgp = c(1.6, 0.6, 0))
+	hist2d(x = gaia1$Bpmag - gaia1$Rpmag, y = gaia1$Gmag, 
+	   col = c("white", gray(((15:0)/20))), FUN = function(vec) {log(length(vec)+1)},
+	   xlab = "", ylab = "", nbin = 100, axes = F, xaxs = "r", yaxs = "r",
+	   ylim = rev(range(gaia1$Gmag)))
+	cond.tmp <- gaia1$true_SourceType == cu8class.nums.all[ind.tmp[ii]] & 
+	   gaia1$ets.class != cu8class.nums.all[ind.tmp[ii]] & !is.na(gaia1$ets.class)
+	points(gaia1$Bpmag[cond.tmp] - gaia1$Rpmag[cond.tmp],  gaia1$Gmag[cond.tmp], 
+#	   cex = 0.4, col = tc.tmp[cu8class.names.all[ind.tmp[ii]]])
+	   cex = 0.4, col = tc.tmp[as.character(gaia1$ets.class[cond.tmp])])
+	text(-12, 5, label = paste0("Incorrect cl. \n", cu8class.str.all[ind.tmp[ii]]), pos = 4)
+	box()
+	if(ii == 5) {axis(1)}
+   }
+mtext(expression(G[BP] - G[RP]), side = 1, line = 0.5, outer = T)
+mtext("G", side = 2, line = 0.5, outer = T)
+
+dev.off()
+@
+
+\begin{figure}[H]
+\begin{center}
+
+\includegraphics{figures/CMDByPred.png}
+\caption{\footnotesize{The class-wise $(G, G_{BP} - G_{RP})$ colour-magnitude diagrams of the regular DSC classes in the validation data set, as a function of classification quality. The different regular classes of DSC occupy different rows (stars: top, white dwarfs: second from top, binaries: middle row, quasars: fourth row, galaxies: bottom row). The grey background 2D histogram shows the complete validation data set and is the same on all panels. The left column shows all objects from the class, regardless of estimated label. Middle column: correctly classified objects from the class.  The colours in these two columns indicate the true class. Right column: misclassified objects from the class, the colour here showing the (mis-)estimated class label from the ET classifier (orange: star, blue: white dwarf, red: binary, purple: quasar, green: galaxy).}}
+\label{fig:CMDByPred}
+\end{center}
+\end{figure}
+
+The colour-magnitude diagrams, shown in Fig. \ref{fig:CMDByPred}, also suggest a reasonable behaviour of the ET classifier. The distribution of the correctly labelled objects (middle column) follow well that of the true labels (although colour and magnitude was not directly used in the classifier). The mislabelled cases are in majority on the outskirts of the distribution of their class, such as, for example, the binaries misclassified as stars (third row, rightmost panel, orange dots): they are on the red edge of the binary distribution, where stars dominate in the validation set. The pattern of misclassifications is similar in every class. The position of objects getting a wrong label occupy a position which is compatible with their wrongly assigned class (again, despite that colour and magnitude were not directly used in the classifier).
+
+
+%\subsubsection{Magnitude histograms per estimated class}
+
+
+\subsubsection{Sky maps of correct/incorrect classifications}
+
+<<fig=FALSE,echo=FALSE,results=hide>>=
+png("figures/SkymapClassQual.png", height=1300, width=1200, pointsize=20)
+p.tmp <- c('-4' = 16, '-3' = 1, '-2' = 2,  '-1' = 2, '0' = 3, '1' = 17, '2' = 8, '4' = 18, '5' = 16)
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 90, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 90, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 90, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 90, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 90, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 90, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 90, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 90, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 90, maxColorValue = 255))
+par(mfrow = c(5,3), mar = c(1,1,2,1), mgp = c(1.6,0.6,0))
+for(ii in 5:9)
+   {
+	cond.tmp <- gaia1$true_SourceType == cu8class.nums.all[ii]
+	plot(mapproject(gaia1$Ra[cond.tmp]*180/pi, gaia1$Dec[cond.tmp]*180/pi, projection = "aitoff"),
+	       pch = 16, cex = 0.2, 
+	       col = tc.tmp[as.character(gaia1$true_SourceType[cond.tmp])], axes = F, 
+	       xlab = "", ylab = "", xlim = c(-2, 2), ylim = c(-1,1))
+	map.grid(lim = c(0, 359, -90, 90), lty = 1, labels = F, col = 1)
+	cond.tmp <- gaia1$ets.class == cu8class.nums.all[ii] & gaia1$true_SourceType == cu8class.nums.all[ii] &
+	       !is.na(gaia1$ets.class)
+	plot(mapproject(gaia1$Ra[cond.tmp]*180/pi, gaia1$Dec[cond.tmp]*180/pi, projection = "aitoff"),
+	       pch = 16, cex = 0.2, 
+	       col = tc.tmp[cu8class.names.all[ii]], axes = F, main = cu8class.str.all[ii],
+	       xlab = "", ylab = "", xlim = c(-2, 2), ylim = c(-1,1))
+	map.grid(lim = c(0, 359, -90, 90), lty = 1, labels = F, col = 1)
+	cond.tmp <- gaia1$ets.class != cu8class.nums.all[ii] & gaia1$true_SourceType == cu8class.nums.all[ii] &
+	       !is.na(gaia1$ets.class)
+	plot(mapproject(gaia1$Ra[cond.tmp]*180/pi, gaia1$Dec[cond.tmp]*180/pi, projection = "aitoff"),
+	       pch = 16, cex = 0.2, 
+	       col = tc.tmp[as.character(gaia1$ets.class[cond.tmp])], axes = F, 
+	       xlab = "", ylab = "", xlim = c(-2, 2), ylim = c(-1,1))
+	map.grid(lim = c(0, 359, -90, 90), lty = 1, labels = F, col = 1)
+	}
+dev.off()
+@
+
+\begin{figure}[H]
+\begin{center}
+
+\includegraphics{figures/SkymapClassQual.png}
+@
+\end{center}
+\caption{\footnotesize{Sky maps of the sources by true class (left column, from top: stars, white dwarfs, binaries, quasars, galaxies), the correctly classified members of the class (middle column), and the incorrectly classified members of the class (right column). In the left and middle columns, colours indicate the true class. In the right column, the colours indicate which class was (mistakenly) given to the objects by the ET (orange: predicted star, blue: predicted white dwarf, red: predicted binary, purple: predicted quasar, green: predicted galaxy). }}
+\label{fig:SkymapClassQual}
+\end{figure}
+
+Figure \ref{fig:SkymapClassQual} shows the sky distribution of all validation sources by true class, the distribution of the correctly classified cases and that of the incorrectly classified ones. No particular dependence on position can be discerned. 
+
+
+%\subsubsection{Sky maps of modal probabilities}
+
+
+\subsubsection{Purity and completeness} \label{subsubsec:puritycompl}
+
+<<label=figPrecRec, include=false, echo=false>>=
+par(mfrow = c(2,3), mar = c(2.5,2.5,2,1), mgp = c(1.5,0.5,0))
+for(ii in 1:5)
+   {
+	r.tmp <- sapply(seq(0.2, 1, by = 0.01), recall.fun, whichclass = cu8class.nums[ii],
+	   probvec = gaia1[, paste0("etsprob", cu8class.nums[ii])], truthvec = gaia1$true_SourceType)
+	plot(seq(0.2, 1, by = 0.01), r.tmp, type = "l", col = "black", xlab = "Probability threshold",
+	   ylab = "Fraction", lwd = 2, main = cu8class.str[ii], log = "y", ylog = TRUE,
+	   ylim = c(0.00001, 1)) 
+	p.tmp <- sapply(seq(0.2, 1, by = 0.01), precision.fun, whichclass = cu8class.nums[ii],
+	   probvec = gaia1[, paste0("etsprob", cu8class.nums[ii])], truthvec = gaia1$true_SourceType)
+    lines(seq(0.2, 1, by = 0.01), p.tmp, lwd = 2, lty = 2)
+	for(jj in setdiff(1:5, ii))
+	   {
+		p.tmp <- sapply(seq(0.2, 1, by = 0.01), loss.fun, fromclass = cu8class.nums[jj],
+		   probvec = gaia1[, paste0("etsprob", cu8class.nums[ii])], truthvec = gaia1$true_SourceType)
+		lines(seq(0.2, 1, by = 0.01), p.tmp, col = c.tmp[cu8class.names[jj]], lwd = 2)
+	   }
+  }
+# plot(1, 1, xlim = c(0,1),  ylim = c(0,1), type = "n", axes = F, xlab = "", ylab = "")
+# legend(-0.07,0.9, legend = c(expression(N[TPC] %/% N[C]), 
+   # "True positive fraction in predicted class", paste("Class",
+   # cu8class.names[1:5], "as contamination")), lwd = 2, lty = 1, col = c("black",
+   # c.tmp[cu8class.names[1:5]]), bty = "n")
+@
+
+\begin{figure}[H]
+\begin{center}
+<<label=fig:PrecRec,fig=TRUE,echo=FALSE, height=4.5, width=9>>=
+<<figPrecRec>>
+@
+\end{center}
+\caption{Characterisation of the purity, the completeness and the contamination in samples based on the ET classification results. The panels present the content of selected samples from each of the five predicted DSC classes, as a function of probability threshold. In panel showing selection from (say) class $C$, the solid black line shows what fraction of the {\it true} class $C$ is correctly selected depending on the probability threshold. The broken black line shows the fraction of true positives in the {\it selected} class $C$. The coloured lines show what fraction of the {\it other true} classes gets mistakenly selected into class $C$; the colours indicate the true class of the contamination. Note the logarithmic scale of the $y$ axis.}
+\label{fig:PrecRec}
+\end{figure}
+
+Selection of certain types of objects (galaxies, quasars, binaries for downstream modules) can be required to satisfy certain completeness or purity requirements. These requirements can sometimes be opposing for different modules using the same object type. A custom-tailored selection can be most easily achieved by setting a probability treshold which must be exceeded by the classification probability for an object to be selected. A low threshold will result in a near-complete sample, which has a large fraction of contaminating objects (false negatives), while a high threshold produces a purer sample, which nevertheless loses a large fraction of the true objects. 
+
+Figure \ref{fig:PrecRec} provides basic information aiming to aid the choice of a threshold. It shows the fractions of true positives, correct identifications and rates of contaminating objects as a function of selection threshold. Taking binaries as an example, the solid black curve shows the selected fraction of {\it true} binaries (that is, $N_{selected} / N_{true binaries}$) versus the selection threshold. Using a threshold of 0.4 (that is, $p_{binary} > 0.4$ in order to get into the sample), a relatively large fraction of the real binaries will be identified (approximately 80\%). With a threshold of 0.9, this drops to barely more than 10\% of detected real binaries. 
+
+Checking the broken black line, we can estimate the fraction of true positives in the samples, although this estimate directly depends on the composition of the DSC test set, and cannot be used to assess contamination fraction for a real, unknown Gaia sample. Using the low threshold, only a minority of the selected sample, 15\%  will be true binary, although these indeed represent about 80\% of all true binaries. This sample is huge, and the price to pay for a relatively complete binary sample is a very large contamination. Using the higher threshold, the purity of the sample increases to about 90\%, but at the same time, completeness decreases to 10\%.
+
+To get a more objective idea about the contamination we can expect in our sample with a specific threshold, it is better to consult the coloured lines. These show what fraction of other {\it true} classes make it into the selected sample using a given threshold. Continuing with the example of binary sample selection, we can read off the orange line (which shows the fraction of {\it true} stars that gets selected as a function of threshold) that the threshold $p_{binary} > 0.4$ selects nearly as high a fraction of stars as that of binaries. This means that supposing 700 million true single and 700 million true binary star systems in a new Gaia data set, such a threshold would provide a sample containing half single stars, half binaries. Using the threshold of 0.9 on the probability of the binary class, binaries dominate the selected sample (about ten times more binaries than single stars).
+
+The bottom middle panel suggests that galaxies can be selected most advantageously: completeness remains high in a wide range of thresholds, and the fraction of other classes contaminating the galaxy sample is relatively low. However, considering that galactic objects are more numerous than galaxies by a factor of about 1000, this still means more contamination than true galaxies in a sample aimed at completeness. For quasars, completeness decreases with increasing threshold faster than for galaxies, so for a complete sample, a high fraction of contamination is still expected.
+
+
+\pagebreak
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\subsection{Astrometric classifier} \label{subsec:regularcl:astrom}
+
+The astrometric classifier provides a vector of class probabilities using a Gaussian mixture model defined in the two-dimensional space of proper motions in $\alpha \cos \delta$ and $\delta$. 
+
+\subsubsection{Confusion matrix} \label{subsubsec:regularcl:astrconfmat}
+
+\setkeys{Gin}{width=0.8\textwidth}
+
+<<label=figAstrConfMat, include=false, echo=false>>=
+confmat.tmp <- table(factor(gaia1$true_SourceType, levels = c(-4,-2,-1,0,1,2,4,5)),
+   factor(gaia1$astro.class, levels = c(0,1,2,4,5)), useNA = "n")[4:8,]
+dimnames(confmat.tmp) <- list(cu8class.str, cu8class.str)
+namat.tmp <- matrix(table(factor(gaia1$true_SourceType, levels = c(-4,-2,-1,0,1,2,4,5)),
+   factor(gaia1$astro.class, levels = c(0,1,2,4,5)), useNA = "i")[4:8,6],
+   ncol = 1)
+dimnames(namat.tmp) <- list(cu8class.str, "NA")
+#quartz(width = 6, height = 2.8)
+layout(matrix(1:2, ncol = 2), width = c(7,1))
+par(mar = c(0.5,5,3.5,0.5)) 
+matPlot.fun(confmat.tmp, need.xlabs = T, need.ylabs = T)
+par(mar = c(2.2,0,3.5,0.5)) 
+tablePlot.fun(namat.tmp, need.xlabs = T, need.ylabs = F)
+@
+
+\begin{figure}[H]
+\begin{center}
+<<label=fig:AstrConfMat,fig=TRUE,echo=FALSE, height=2.8, width=6>>=
+<<figAstrConfMat>>
+@
+\end{center}
+\caption{The confusion matrix of the astrometric classifier. Rows correspond to true class, columns to predicted class. In the upper left $5 \times 5$ block, as well as in the account of NAs, counts are given. The column corresponding to errors and the row corresponding to contamination (both orange-shaded according to quality) show fractions.}
+\label{fig:AstrConfMat}
+\end{figure}
+
+Nothing was classified as quasar or galaxy by the astrometric classifier. The reason of this is either ties in the output probability vector, or NA proper motion values in the input. The output probability vectors are either fully non-NA (then the final estimated class label can be NA or non-NA, depending on being tied or not), or NA for all classes (and then the final class label is NA).
+
+The astrometric classifier produces a lot of fully NA output probVectors. These are produced for sources whose positions have very large errors (often several hundred %), and the PM is either NA, or has large value and large error (~100%). This is the case for most of the galaxies (~160000 of them), but only relatively few quasars (~36000) or other objects, and is probably a consequence of the fact that galaxies are extended objects, and this causes difficulties in their processing.
+
+When the classifier produces a non-NA probability vector, the estimated class label can still be NA, because of ties (DSC does not record yet tied labels from the astrometric or pos-gmag-px classifiers, but this will become possible if their results are stored in DscClassifierResult objects in the ClassifierResults array). This is the case for most of the quasars (~360000), but only few galaxies (~3000). The PM for these objects is typically small, and the error, though not exceedingly high, is compatible with a zero PM. This could help the classifier to recognise them as quasars. However, the classifier gives then equal probability to quasar and galaxy class (in theory, perfectly reasonably), and the output is NA due to tie. Checking the output probVectors, the probability vector is above 0.4 for both classes (correctly). This raises the question whether it is reasonable to use the astrometric classifier to do a five-class classification, or it would be better to use it as a galactic/extragalactic object discriminator.  
+
+\subsubsection{Classification probability vectors} \label{subsubsec:regularcl:astrprobvec}
+
+\setkeys{Gin}{width=\textwidth}
+
+<<fig=FALSE,echo=FALSE,results=hide>>=
+png("figures/AstrProbVectors5by5.png", height=750, width=1200, pointsize=20)
+
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 64, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 64, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 64, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 64, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 64, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 64, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 64, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 64, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 64, maxColorValue = 255))
+
+par(oma = c(2,2,0,0))
+layout(matrix(1:25, nrow = 5, byrow = T), height = c(1,1,1,1,1.25), width = c(1.2,1,1,1,1))
+for(ii in 1:5)       # index over estimated label
+ for(jj in 1:5)      # index over true label
+   {
+	if(ii == 5) {mar1 <- 2.6; xlab.tmp <- "Class"} else {mar1 <- 0.1; xlab.tmp <- ""} 
+	if(jj == 1) {mar2 <- 2.6; ylab.tmp <- "Probability"} else {mar2 <- 0.1; ylab.tmp <- ""} 
+	par(mar = c(mar1,mar2,0.1,0.1), mgp = c(1.6,0.6,0))
+   	n.tmp <- sum(gaia1$astro.class == cu8class.nums[ii] &
+   	   gaia1$true_SourceType == cu8class.nums[jj], na.rm = T)
+   	if(n.tmp > 0)
+   	   {
+   		i.tmp <- sample(which(gaia1$astro.class == cu8class.nums[ii] & 
+   		   gaia1$true_SourceType == cu8class.nums[jj]), 
+   		   size = min(500, sum(gaia1$astro.class == cu8class.nums[ii] & 
+   		   gaia1$true_SourceType == cu8class.nums[jj], na.rm = T)))
+		l.tmp <- as.character(gaia1$true_SourceType[i.tmp])
+		plot(1:5, gaia1[i.tmp[1], paste0("astroprob", c(0:2,4,5))], axes = F,
+		   type = "l", col = tc.tmp[l.tmp[1]], ylim = c(0,1), xlab = xlab.tmp,
+		   ylab = ylab.tmp, cex = 1.2)
+		box()
+		if(ii == 5) axis(1, at = 1:5, labels = cu8class.names)
+		if(jj == 1) axis(2)
+		for(jj in 2:length(i.tmp))
+		   {
+		   	lines(1:5, gaia1[i.tmp[jj], paste0("astroprob", c(0:2,4,5))], col = tc.tmp[l.tmp[jj]])
+		   }
+	   } else {
+		plot(1:5, gaia1[i.tmp[1], paste0("astroprob", c(0:2,4,5))], axes = F,
+		   type = "n", ylim = c(0,1), xlab = xlab.tmp, ylab = ylab.tmp, cex = 1.2)
+		box()
+		if(ii == 5) axis(1, at = 1:5, labels = cu8class.names)
+		if(jj == 1) axis(2)
+	   }
+   }
+mtext("True class", side = 1, line = 0.6, outer = T, font = 2)
+mtext("Estimated class", side = 2, line = 0.6, outer = T, font = 2)
+dev.off()
+@
+
+\begin{figure}[H]
+\begin{center}
+
+\includegraphics{figures/AstrProbVectors5by5.png}
+
+\end{center}
+\caption{The probability vectors produced by the astrometric classifier, for a sample of at most 500 objects of each combination of true and estimated class.  The true classes are colour-coded (the same as in Figure \ref{fig:skymapClasswise}), and are arranged by column (leftmost column: stars, second from left: white dwarfs, middle: binaries, fourth: quasars, rightmost: galaxies). Rows correspond to classes estimated by the astrometric classifier (top: labelled as star, second from top: labelled as white dwarf, middle: labelled as binary, fourth: labelled as quasar, fifth: labelled as galaxy).}
+\label{fig:AstrProbVectors5by5}
+\end{figure}
+
+
+
+\subsubsection{Class probabilities vs. $G$}
+
+
+<<fig=FALSE,echo=FALSE,results=hide>>=
+
+png("figures/AstrProbsVsG5by5.png", height=1200, width=1200, pointsize=20)
+
+p.tmp <- c('-4' = 16, '-3' = 1, '-2' = 2,  '-1' = 2, '0' = 3, '1' = 17, '2' = 8, '4' = 18, '5' = 16)
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+x.tmp <- c('-4' = 0.4, '-3' = 0.2, '-2' = 0.25,  '-1' = 0.25, '0' = 0.25, '1' = 0.4, '2' = 0.25, '4' = 0.5, '5' = 0.4)
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 64, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 64, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 64, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 64, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 64, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 64, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 64, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 64, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 64, maxColorValue = 255))
+
+i.lst <- lapply(1:5, function(kk) 
+   sample(which(gaia1$true_SourceType == cu8class.nums[kk]), size = min(2000,
+	   sum(gaia1$true_SourceType == cu8class.nums[kk]))))
+par(oma = c(2,2,0,0))
+layout(matrix(1:25, nrow = 5, byrow = T), height = c(1,1,1,1,1.25), width = c(1.2,1,1,1,1))
+for(ii in 1:5)       # index over estimated label
+ for(jj in 1:5)      # index over true label
+   {
+	if(ii == 5) {mar1 <- 2.6; xlab.tmp <- cu8class.str[jj]} else {mar1 <- 0.1; xlab.tmp <- ""} 
+	if(jj == 1) {mar2 <- 2.6; ylab.tmp <- paste0("Prob.of class ", cu8class.nums[ii])} else {mar2 <- 0.1; ylab.tmp <- ""} 
+	par(mar = c(mar1,mar2,0.1,0.1), mgp = c(1.6,0.6,0))
+   	n.tmp <- sum(gaia1$astro.class == cu8class.nums[ii], na.rm = T)
+	a.tmp <- sample(1:nrow(gaia1), size = 20000) 
+  	i.tmp <- i.lst[[jj]]
+   	if(n.tmp > 0)
+   	   {
+		l.tmp <- as.character(gaia1$true_SourceType[i.tmp])
+		plot(gaia1$Gmag[a.tmp], gaia1[a.tmp, paste0("astroprob", cu8class.nums[ii])], axes = F,
+		   pch = 16, cex = 0.3, col = "lightgrey", ylim = c(0,1), xlab = xlab.tmp,
+		   ylab = ylab.tmp, xlim = c(6,23))
+		box()
+		if(ii == 5) axis(1)
+		if(jj == 1) axis(2)
+		points(gaia1$Gmag[i.tmp], gaia1[i.tmp, paste0("astroprob", cu8class.nums[ii])], 
+		   col = c.tmp[l.tmp[jj]], pch = 16, cex = 0.4)
+	   } else {
+		plot(gaia1$Gmag[a.tmp], gaia1[a.tmp, paste0("astroprob", cu8class.nums[ii])], axes = F,
+		   type = "n", ylim = c(0,1), xlab = xlab.tmp, ylab = ylab.tmp, cex = 0.3, xlim = c(6,23))
+		box()
+		if(ii == 5) axis(1)
+		if(jj == 1) axis(2)
+	   }
+   }
+mtext("Magnitude G", side = 1, line = 0.6, outer = T, font = 1)
+mtext("Probability", side = 2, line = 0.6, outer = T, font = 1)
+dev.off()
+@
+
+\begin{figure}[H]
+\begin{center}
+
+\includegraphics{figures/AstrProbsVsG5by5.png}
+
+\end{center}
+\caption{Probabilities produced by the astrometric classifier, for a sample of at most 20000 objects of each (true) class, as a function of apparent $G$ magnitude. Each column contains results for a regular class (leftmost: stars, second: white dwarfs, middle: physical binaries, fourth: quasars, fifth: galaxies). The true class is also colour-coded (the colour key is the same as in Figure \ref{fig:AstrProbVectors5by5}). The uppermost row shows the astrometric probability for class star for the objects, the second row from top, for class white dwarf, the third, for class physical binary, the fourth, for class quasar,  and the bottom row, for class galaxy. The grey dots show a mixture of all classes, for comparison.}
+\label{fig:AstrProbsVsG5by5}
+\end{figure}
+
+
+\subsubsection{Class probabilities vs. $G_{BP} - G_{BP}$}
+
+<<fig=FALSE,echo=FALSE,results=hide>>=
+png("figures/AstrProbsVsBpRp5by5.png", height=1200, width=1200, pointsize=20)
+
+p.tmp <- c('-4' = 16, '-3' = 1, '-2' = 2,  '-1' = 2, '0' = 3, '1' = 17, '2' = 8, '4' = 18, '5' = 16)
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+x.tmp <- c('-4' = 0.4, '-3' = 0.2, '-2' = 0.25,  '-1' = 0.25, '0' = 0.25, '1' = 0.4, '2' = 0.25, '4' = 0.5, '5' = 0.4)
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 64, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 64, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 64, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 64, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 64, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 64, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 64, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 64, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 64, maxColorValue = 255))
+
+par(oma = c(2,2,0,0))
+layout(matrix(1:25, nrow = 5, byrow = T), height = c(1,1,1,1,1.25), width = c(1.2,1,1,1,1))
+i.lst <- lapply(1:5, function(kk) 
+   sample(which(gaia1$true_SourceType == cu8class.nums[kk]), size = min(2000,
+	   sum(gaia1$true_SourceType == cu8class.nums[kk]))))
+for(ii in 1:5)       # index over estimated label
+ for(jj in 1:5)      # index over true label
+   {
+	if(ii == 5) {mar1 <- 2.6; xlab.tmp <- cu8class.str[jj]} else {mar1 <- 0.1; xlab.tmp <- ""} 
+	if(jj == 1) {mar2 <- 2.6; ylab.tmp <- paste0("Prob.of class ", cu8class.nums[ii])} else {mar2 <- 0.1; ylab.tmp <- ""} 
+	par(mar = c(mar1,mar2,0.1,0.1), mgp = c(1.6,0.6,0))
+   	n.tmp <- sum(gaia1$astro.class == cu8class.nums[ii], na.rm = T)
+	a.tmp <- sample(1:nrow(gaia1), size = 20000) 
+  	i.tmp <- i.lst[[jj]]
+   	if(n.tmp > 0)
+   	   {
+		l.tmp <- as.character(gaia1$true_SourceType[i.tmp])
+		plot(gaia1$Bpmag[a.tmp] - gaia1$Rpmag[a.tmp], gaia1[a.tmp, paste0("astroprob", cu8class.nums[ii])], axes = F,
+		   pch = 16, cex = 0.3, col = "lightgrey", ylim = c(0,1), xlab = xlab.tmp,
+		   ylab = ylab.tmp, xlim = c(-5,7))
+		box()
+		if(ii == 5) axis(1)
+		if(jj == 1) axis(2)
+		points(gaia1$Bpmag[i.tmp] - gaia1$Rpmag[i.tmp], gaia1[i.tmp, paste0("astroprob", cu8class.nums[ii])], 
+		   col = c.tmp[l.tmp[jj]], pch = 16, cex = 0.4)
+	   } else {
+		plot(gaia1$Bpmag[a.tmp] - gaia1$Rpmag[a.tmp], gaia1[a.tmp, paste0("astroprob", cu8class.nums[ii])], axes = F,
+		   type = "n", ylim = c(0,1), xlab = xlab.tmp, ylab = ylab.tmp, cex = 0.3, xlim = c(-5,7))
+		box()
+		if(ii == 5) axis(1)
+		if(jj == 1) axis(2)
+	   }
+   }
+mtext(expression(G[BP] - G[RP]), side = 1, line = 0.6, outer = T, font = 1)
+mtext("Probability", side = 2, line = 0.6, outer = T, font = 1)
+dev.off()
+@
+
+\begin{figure}[H]
+\begin{center}
+
+\includegraphics{figures/AstrProbsVsBpRp5by5.png}
+
+\end{center}
+
+\caption{Probabilities produced by the astrometric classifier, for a sample of at most 20000 objects of each (true) class, as a function of $G_{BP} - G_{RP}$. Each column contains results for a regular class (leftmost: stars, second: white dwarfs, middle: physical binaries, fourth: quasars, fifth: galaxies). The true class is also colour-coded (the colour key is the same as in Figure \ref{fig:AstrProbVectors5by5}). The uppermost row shows the astrometric probability for class star for the objects, the second row from top, for class white dwarf, the third, for class physical binary, the fourth, for class quasar,  and the bottom row, for class galaxy. The grey dots show a mixture of all classes, for comparison.}
+\label{fig:AstrProbsVsBpRp5by5}
+\end{figure}
+
+
+\subsubsection{Class probabilities vs. astrometry}
+
+<<fig=FALSE,echo=FALSE,results=hide>>=
+png("figures/AstrProbsVsPm5by5.png", height=1200, width=1200, pointsize=20)
+
+p.tmp <- c('-4' = 16, '-3' = 1, '-2' = 2,  '-1' = 2, '0' = 3, '1' = 17, '2' = 8, '4' = 18, '5' = 16)
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+x.tmp <- c('-4' = 0.4, '-3' = 0.2, '-2' = 0.25,  '-1' = 0.25, '0' = 0.25, '1' = 0.4, '2' = 0.25, '4' = 0.5, '5' = 0.4)
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 64, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 64, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 64, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 64, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 64, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 64, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 64, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 64, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 64, maxColorValue = 255))
+
+i.lst <- lapply(1:5, function(kk) 
+   sample(which(gaia1$true_SourceType == cu8class.nums[kk]), size = min(2000,
+	   sum(gaia1$true_SourceType == cu8class.nums[kk]))))
+par(oma = c(2,2,0,0))
+layout(matrix(1:25, nrow = 5, byrow = T), height = c(1,1,1,1,1.25), width = c(1.2,1,1,1,1))
+for(ii in 1:5)       # index over estimated label
+ for(jj in 1:5)      # index over true label
+   {
+	if(ii == 5) {mar1 <- 2.6; xlab.tmp <- cu8class.str[jj]} else {mar1 <- 0.1; xlab.tmp <- ""} 
+	if(jj == 1) {mar2 <- 2.6; ylab.tmp <- paste0("Prob.of class ", cu8class.nums[ii])} else {mar2 <- 0.1; ylab.tmp <- ""} 
+	par(mar = c(mar1,mar2,0.1,0.1), mgp = c(1.6,0.6,0))
+   	n.tmp <- sum(gaia1$astro.class == cu8class.nums[ii], na.rm = T)
+	a.tmp <- sample(1:nrow(gaia1), size = 20000) 
+  	i.tmp <- i.lst[[jj]]
+   	if(n.tmp > 0)
+   	   {
+		l.tmp <- as.character(gaia1$true_SourceType[i.tmp])
+		plot(gaia1$pm[a.tmp], gaia1[a.tmp, paste0("astroprob", cu8class.nums[ii])], axes = F,
+		   pch = 16, cex = 0.3, col = "lightgrey", ylim = c(0,1), xlab = xlab.tmp,
+		   ylab = ylab.tmp, xlim = c(0, 150))
+		box()
+		if(ii == 5) axis(1)
+		if(jj == 1) axis(2)
+		points(gaia1$pm[i.tmp], gaia1[i.tmp, paste0("astroprob", cu8class.nums[ii])], 
+		   col = c.tmp[l.tmp[jj]], pch = 16, cex = 0.4)
+	   } else {
+		plot(gaia1$pm[a.tmp], gaia1[a.tmp, paste0("astroprob", cu8class.nums[ii])], axes = F,
+		   type = "n", ylim = c(0,1), xlab = xlab.tmp, ylab = ylab.tmp, cex = 0.3, xlim = c(0, 150))
+		box()
+		if(ii == 5) axis(1)
+		if(jj == 1) axis(2)
+	   }
+   }
+mtext("Proper motion", side = 1, line = 0.6, outer = T, font = 1)
+mtext("Probability", side = 2, line = 0.6, outer = T, font = 1)
+dev.off()
+@
+
+\begin{figure}[H]
+\begin{center}
+
+\includegraphics{figures/AstrProbsVsPm5by5.png}
+
+\end{center}
+\caption{Probabilities produced by the astrometric classifier, for a sample of at most 2000 objects of each (true) class, as a function of proper motion. Each column contains results for a regular class (leftmost: stars, second: white dwarfs, middle: physical binaries, fourth: quasars, fifth: galaxies). The true class is also colour-coded (the colour key is the same as in Figure \ref{fig:AstrProbVectors5by5}). The uppermost row shows the astrometric probability for class star for the objects, the second row from top, for class white dwarf, the third, for class physical binary, the fourth, for class quasar,  and the bottom row, for class galaxy. The grey dots show a mixture of all classes, for comparison.}
+\label{fig:AstrProbsVsPm5by5}
+\end{figure}
+
+
+%\subsubsection{Magnitude histograms per estimated class}
+
+%\subsubsection{Sky maps of classification accuracy}
+
+\pagebreak
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Position--parallax--G-magnitude classifier} \label{subsec:regularcl:pos}
+
+This classifier combines the likelihood for various classes based on the G-magnitude and the parallax with the density of the class as a function of galactic latitude. 
+
+
+\subsubsection{Confusion matrix} \label{subsubsec:regularcl:posconfmat}
+
+\setkeys{Gin}{width=0.8\textwidth}
+
+<<label=figPosConfMat, include=false, echo=false>>=
+confmat.tmp <- table(factor(gaia1$true_SourceType, levels = c(-4,-2,-1,0,1,2,4,5)),
+   factor(gaia1$pos.class, levels = c(0,1,2,4,5)), useNA = "n")[4:8,]
+dimnames(confmat.tmp) <- list(cu8class.str, cu8class.str)
+namat.tmp <- matrix(table(factor(gaia1$true_SourceType, levels = c(-4,-2,-1,0,1,2,4,5)),
+   factor(gaia1$pos.class, levels = c(0,1,2,4,5)), useNA = "i")[4:8,6],
+   ncol = 1)
+dimnames(namat.tmp) <- list(cu8class.str, "NA")
+#quartz(width = 6, height = 2.8)
+layout(matrix(1:2, ncol = 2), width = c(7,1))
+par(mar = c(0.5,5,3.5,0.5)) 
+matPlot.fun(confmat.tmp, need.xlabs = T, need.ylabs = T)
+par(mar = c(2.2,0,3.5,0.5)) 
+tablePlot.fun(namat.tmp, need.xlabs = T, need.ylabs = F)
+@
+
+\begin{figure}[H]
+\begin{center}
+<<label=fig:PosConfMat,fig=TRUE,echo=FALSE, height=2.8, width=6>>=
+<<figPosConfMat>>
+@
+\end{center}
+\caption{The confusion matrix of the position--parallax--G-magnitude classifier. Rows correspond to true class, columns to predicted class. In the upper left $5 \times 5$ block, as well as in the account of NAs, counts are given. The column corresponding to errors and the row corresponding to contamination (both orange-shaded according to quality) shows fractions.}
+\label{fig:PosConfMat}
+\end{figure}
+
+Nothing was classified as quasar or galaxy by the position--parallax--G-magnitude classifier. The reason of this is ties in the output probability vector. The final estimated class label can be NA or non-NA, depending on being tied or not.
+
+
+\subsubsection{Classification probability vectors} \label{subsubsec:regularcl:posprobvec}
+
+\setkeys{Gin}{width=\textwidth}
+
+<<fig=FALSE,echo=FALSE,results=hide>>=
+png("figures/PosProbVectors5by5.png", height=750, width=1200, pointsize=20)
+
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 64, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 64, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 64, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 64, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 64, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 64, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 64, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 64, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 64, maxColorValue = 255))
+
+par(oma = c(2,2,0,0))
+layout(matrix(1:25, nrow = 5, byrow = T), height = c(1,1,1,1,1.25), width = c(1.2,1,1,1,1))
+for(ii in 1:5)       # index over estimated label
+ for(jj in 1:5)      # index over true label
+   {
+	if(ii == 5) {mar1 <- 2.6; xlab.tmp <- "Class"} else {mar1 <- 0.1; xlab.tmp <- ""} 
+	if(jj == 1) {mar2 <- 2.6; ylab.tmp <- "Probability"} else {mar2 <- 0.1; ylab.tmp <- ""} 
+	par(mar = c(mar1,mar2,0.1,0.1), mgp = c(1.6,0.6,0))
+   	n.tmp <- sum(gaia1$pos.class == cu8class.nums[ii] &
+   	   gaia1$true_SourceType == cu8class.nums[jj], na.rm = T)
+   	if(n.tmp > 0)
+   	   {
+   		i.tmp <- sample(which(gaia1$pos.class == cu8class.nums[ii] & 
+   		   gaia1$true_SourceType == cu8class.nums[jj]), 
+   		   size = min(500, sum(gaia1$pos.class == cu8class.nums[ii] & 
+   		   gaia1$true_SourceType == cu8class.nums[jj], na.rm = T)))
+		l.tmp <- as.character(gaia1$true_SourceType[i.tmp])
+		plot(1:5, gaia1[i.tmp[1], paste0("posprob", c(0:2,4,5))], axes = F,
+		   type = "l", col = tc.tmp[l.tmp[1]], ylim = c(0,1), xlab = xlab.tmp,
+		   ylab = ylab.tmp, cex = 1.2)
+		box()
+		if(ii == 5) axis(1, at = 1:5, labels = cu8class.names)
+		if(jj == 1) axis(2)
+		for(jj in 2:length(i.tmp))
+		   {
+		   	lines(1:5, gaia1[i.tmp[jj], paste0("posprob", c(0:2,4,5))], col = tc.tmp[l.tmp[jj]])
+		   }
+	   } else {
+		plot(1:5, gaia1[i.tmp[1], paste0("posprob", c(0:2,4,5))], axes = F,
+		   type = "n", ylim = c(0,1), xlab = xlab.tmp, ylab = ylab.tmp, cex = 1.2)
+		box()
+		if(ii == 5) axis(1, at = 1:5, labels = cu8class.names)
+		if(jj == 1) axis(2)
+	   }
+   }
+mtext("True class", side = 1, line = 0.6, outer = T, font = 2)
+mtext("Estimated class", side = 2, line = 0.6, outer = T, font = 2)
+dev.off()
+@
+
+\begin{figure}[H]
+\begin{center}
+
+\includegraphics{figures/PosProbVectors5by5.png}
+
+\end{center}
+\caption{The probability vectors produced by the position--parallax--G-magnitude classifier, for a sample of at most 500 objects of each combination of true and estimated class. The true classes are colour-coded (the same as in Figure \ref{fig:skymapClasswise}), and are arranged by column (leftmost column: stars, second from left: white dwarfs, middle: binaries, fourth: quasars, rightmost: galaxies). Rows correspond to classes estimated by the position--parallax--G-magnitude classifier  (top: labelled by ET as star, second from top: labelled as white dwarf, middle: labelled as binary, fourth: labelled as quasar, fifth: labelled as galaxy).}
+\label{fig:PosProbVectors5by5}
+\end{figure}
+
+
+
+\subsubsection{Class probabilities vs. $G$}
+
+
+<<fig=FALSE,echo=FALSE,results=hide>>=
+png("figures/PosProbsVsG5by5.png", height=1200, width=1200, pointsize=20)
+
+p.tmp <- c('-4' = 16, '-3' = 1, '-2' = 2,  '-1' = 2, '0' = 3, '1' = 17, '2' = 8, '4' = 18, '5' = 16)
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+x.tmp <- c('-4' = 0.4, '-3' = 0.2, '-2' = 0.25,  '-1' = 0.25, '0' = 0.25, '1' = 0.4, '2' = 0.25, '4' = 0.5, '5' = 0.4)
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 64, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 64, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 64, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 64, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 64, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 64, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 64, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 64, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 64, maxColorValue = 255))
+
+i.lst <- lapply(1:5, function(kk) 
+   sample(which(gaia1$true_SourceType == cu8class.nums[kk]), size = min(2000,
+	   sum(gaia1$true_SourceType == cu8class.nums[kk]))))
+par(oma = c(2,2,0,0))
+layout(matrix(1:25, nrow = 5, byrow = T), height = c(1,1,1,1,1.25), width = c(1.2,1,1,1,1))
+for(ii in 1:5)       # index over estimated label
+ for(jj in 1:5)      # index over true label
+   {
+	if(ii == 5) {mar1 <- 2.6; xlab.tmp <- cu8class.str[jj]} else {mar1 <- 0.1; xlab.tmp <- ""} 
+	if(jj == 1) {mar2 <- 2.6; ylab.tmp <- paste0("Prob.of class ", cu8class.nums[ii])} else {mar2 <- 0.1; ylab.tmp <- ""} 
+	par(mar = c(mar1,mar2,0.1,0.1), mgp = c(1.6,0.6,0))
+   	n.tmp <- sum(gaia1$pos.class == cu8class.nums[ii], na.rm = T)
+	a.tmp <- sample(1:nrow(gaia1), size = 20000) 
+  	i.tmp <- i.lst[[jj]]
+   	if(n.tmp > 0)
+   	   {
+		l.tmp <- as.character(gaia1$true_SourceType[i.tmp])
+		plot(gaia1$Gmag[a.tmp], gaia1[a.tmp, paste0("posprob", cu8class.nums[ii])], axes = F,
+		   pch = 16, cex = 0.3, col = "lightgrey", ylim = c(0,1), xlab = xlab.tmp,
+		   ylab = ylab.tmp, xlim = c(6,23))
+		box()
+		if(ii == 5) axis(1)
+		if(jj == 1) axis(2)
+		points(gaia1$Gmag[i.tmp], gaia1[i.tmp, paste0("posprob", cu8class.nums[ii])], 
+		   col = c.tmp[l.tmp[jj]], pch = 16, cex = 0.4)
+	   } else {
+		plot(gaia1$Gmag[a.tmp], gaia1[a.tmp, paste0("posprob", cu8class.nums[ii])], axes = F,
+		   type = "n", ylim = c(0,1), xlab = xlab.tmp, ylab = ylab.tmp, cex = 0.3, xlim = c(6,23))
+		box()
+		if(ii == 5) axis(1)
+		if(jj == 1) axis(2)
+	   }
+   }
+mtext("Magnitude G", side = 1, line = 0.6, outer = T, font = 1)
+mtext("Probability", side = 2, line = 0.6, outer = T, font = 1)
+dev.off()
+@
+
+\begin{figure}[H]
+\begin{center}
+
+\includegraphics{figures/PosProbsVsG5by5.png}
+
+\end{center}
+\caption{Probabilities produced by the position--parallax--G-magnitude classifier, for a sample of at most 20000 objects of each (true) class, as a function of apparent $G$ magnitude. Each column contains results for a regular class (leftmost: stars, second: white dwarfs, middle: physical binaries, fourth: quasars, fifth: galaxies). The true class is also colour-coded (the colour key is the same as in Figure \ref{fig:PosProbVectors5by5}). The uppermost row shows the astrometric probability for class star for the objects, the second row from top, for class white dwarf, the third, for class physical binary, the fourth, for class quasar,  and the bottom row, for class galaxy. The grey dots show a mixture of all classes, for comparison.}
+\label{fig:PosProbsVsG5by5}
+\end{figure}
+
+
+\subsubsection{Class probabilities vs. $G_{BP} - G_{BP}$}
+
+<<fig=FALSE,echo=FALSE,results=hide>>=
+png("figures/PosProbsVsBpRp5by5.png", height=1200, width=1200, pointsize=20)
+
+p.tmp <- c('-4' = 16, '-3' = 1, '-2' = 2,  '-1' = 2, '0' = 3, '1' = 17, '2' = 8, '4' = 18, '5' = 16)
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+x.tmp <- c('-4' = 0.4, '-3' = 0.2, '-2' = 0.25,  '-1' = 0.25, '0' = 0.25, '1' = 0.4, '2' = 0.25, '4' = 0.5, '5' = 0.4)
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 64, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 64, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 64, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 64, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 64, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 64, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 64, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 64, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 64, maxColorValue = 255))
+
+par(oma = c(2,2,0,0))
+layout(matrix(1:25, nrow = 5, byrow = T), height = c(1,1,1,1,1.25), width = c(1.2,1,1,1,1))
+i.lst <- lapply(1:5, function(kk) 
+   sample(which(gaia1$true_SourceType == cu8class.nums[kk]), size = min(2000,
+	   sum(gaia1$true_SourceType == cu8class.nums[kk]))))
+for(ii in 1:5)       # index over estimated label
+ for(jj in 1:5)      # index over true label
+   {
+	if(ii == 5) {mar1 <- 2.6; xlab.tmp <- cu8class.str[jj]} else {mar1 <- 0.1; xlab.tmp <- ""} 
+	if(jj == 1) {mar2 <- 2.6; ylab.tmp <- paste0("Prob.of class ", cu8class.nums[ii])} else {mar2 <- 0.1; ylab.tmp <- ""} 
+	par(mar = c(mar1,mar2,0.1,0.1), mgp = c(1.6,0.6,0))
+   	n.tmp <- sum(gaia1$pos.class == cu8class.nums[ii], na.rm = T)
+	a.tmp <- sample(1:nrow(gaia1), size = 20000) 
+  	i.tmp <- i.lst[[jj]]
+   	if(n.tmp > 0)
+   	   {
+		l.tmp <- as.character(gaia1$true_SourceType[i.tmp])
+		plot(gaia1$Bpmag[a.tmp] - gaia1$Rpmag[a.tmp], gaia1[a.tmp, paste0("posprob", cu8class.nums[ii])], axes = F,
+		   pch = 16, cex = 0.3, col = "lightgrey", ylim = c(0,1), xlab = xlab.tmp,
+		   ylab = ylab.tmp, xlim = c(-5,7))
+		box()
+		if(ii == 5) axis(1)
+		if(jj == 1) axis(2)
+		points(gaia1$Bpmag[i.tmp] - gaia1$Rpmag[i.tmp], gaia1[i.tmp, paste0("posprob", cu8class.nums[ii])], 
+		   col = c.tmp[l.tmp[jj]], pch = 16, cex = 0.4)
+	   } else {
+		plot(gaia1$Bpmag[a.tmp] - gaia1$Rpmag[a.tmp], gaia1[a.tmp, paste0("posprob", cu8class.nums[ii])], axes = F,
+		   type = "n", ylim = c(0,1), xlab = xlab.tmp, ylab = ylab.tmp, cex = 0.3, xlim = c(-5,7))
+		box()
+		if(ii == 5) axis(1)
+		if(jj == 1) axis(2)
+	   }
+   }
+mtext(expression(G[BP] - G[RP]), side = 1, line = 0.6, outer = T, font = 1)
+mtext("Probability", side = 2, line = 0.6, outer = T, font = 1)
+dev.off()
+@
+
+\begin{figure}[H]
+\begin{center}
+
+\includegraphics{figures/PosProbsVsBpRp5by5.png}
+
+\end{center}
+\caption{Probabilities produced by the position--parallax--G-magnitude classifier, for a sample of at most 20000 objects of each (true) class, as a function of $G_{BP} - G_{RP}$. Each column contains results for a regular class (leftmost: stars, second: white dwarfs, middle: physical binaries, fourth: quasars, fifth: galaxies). The true class is also colour-coded (the colour key is the same as in Figure \ref{fig:PosProbVectors5by5}). The uppermost row shows the astrometric probability for class star for the objects, the second row from top, for class white dwarf, the third, for class physical binary, the fourth, for class quasar,  and the bottom row, for class galaxy. The grey dots show a mixture of all classes, for comparison.}
+\label{fig:PosProbsVsBpRp5by5}
+\end{figure}
+
+
+\subsubsection{Class probabilities vs. astrometry}
+
+<<fig=FALSE,echo=FALSE,results=hide>>=
+png("figures/PosProbsVsPm5by5.png", height=1200, width=1200, pointsize=20)
+
+p.tmp <- c('-4' = 16, '-3' = 1, '-2' = 2,  '-1' = 2, '0' = 3, '1' = 17, '2' = 8, '4' = 18, '5' = 16)
+c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+x.tmp <- c('-4' = 0.4, '-3' = 0.2, '-2' = 0.25,  '-1' = 0.25, '0' = 0.25, '1' = 0.4, '2' = 0.25, '4' = 0.5, '5' = 0.4)
+rgb.tmp <- sapply(c.tmp, col2rgb)
+tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 64, maxColorValue = 255), 
+	'-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 64, maxColorValue = 255), 
+    '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 64, maxColorValue = 255), 
+    '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 64, maxColorValue = 255), 
+    '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 64, maxColorValue = 255), 
+    '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 64, maxColorValue = 255), 
+    '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 64, maxColorValue = 255), 
+    '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 64, maxColorValue = 255), 
+    '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 64, maxColorValue = 255))
+
+i.lst <- lapply(1:5, function(kk) 
+   sample(which(gaia1$true_SourceType == cu8class.nums[kk]), size = min(2000,
+	   sum(gaia1$true_SourceType == cu8class.nums[kk]))))
+par(oma = c(2,2,0,0))
+layout(matrix(1:25, nrow = 5, byrow = T), height = c(1,1,1,1,1.25), width = c(1.2,1,1,1,1))
+for(ii in 1:5)       # index over estimated label
+ for(jj in 1:5)      # index over true label
+   {
+	if(ii == 5) {mar1 <- 2.6; xlab.tmp <- cu8class.str[jj]} else {mar1 <- 0.1; xlab.tmp <- ""} 
+	if(jj == 1) {mar2 <- 2.6; ylab.tmp <- paste0("Prob.of class ", cu8class.nums[ii])} else {mar2 <- 0.1; ylab.tmp <- ""} 
+	par(mar = c(mar1,mar2,0.1,0.1), mgp = c(1.6,0.6,0))
+   	n.tmp <- sum(gaia1$pos.class == cu8class.nums[ii], na.rm = T)
+	a.tmp <- sample(1:nrow(gaia1), size = 20000) 
+  	i.tmp <- i.lst[[jj]]
+   	if(n.tmp > 0)
+   	   {
+		l.tmp <- as.character(gaia1$true_SourceType[i.tmp])
+		plot(gaia1$pm[a.tmp], gaia1[a.tmp, paste0("posprob", cu8class.nums[ii])], axes = F,
+		   pch = 16, cex = 0.3, col = "lightgrey", ylim = c(0,1), xlab = xlab.tmp,
+		   ylab = ylab.tmp, xlim = c(0, 150))
+		box()
+		if(ii == 5) axis(1)
+		if(jj == 1) axis(2)
+		points(gaia1$pm[i.tmp], gaia1[i.tmp, paste0("posprob", cu8class.nums[ii])], 
+		   col = c.tmp[l.tmp[jj]], pch = 16, cex = 0.4)
+	   } else {
+		plot(gaia1$pm[a.tmp], gaia1[a.tmp, paste0("posprob", cu8class.nums[ii])], axes = F,
+		   type = "n", ylim = c(0,1), xlab = xlab.tmp, ylab = ylab.tmp, cex = 0.3, xlim = c(0, 150))
+		box()
+		if(ii == 5) axis(1)
+		if(jj == 1) axis(2)
+	   }
+   }
+mtext("Proper motion", side = 1, line = 0.6, outer = T, font = 1)
+mtext("Probability", side = 2, line = 0.6, outer = T, font = 1)
+dev.off()
+@
+
+\begin{figure}[H]
+\begin{center}
+
+\includegraphics{figures/PosProbsVsPm5by5.png}
+
+\end{center}
+\caption{Probabilities produced by the position--parallax--G-magnitude classifier, for a sample of at most 20000 objects of each (true) class, as a function of proper motion. Each column contains results for a regular class (leftmost: stars, second: white dwarfs, middle: physical binaries, fourth: quasars, fifth: galaxies). The true class is also colour-coded (the colour key is the same as in Figure \ref{fig:PosProbVectors5by5}). The uppermost row shows the astrometric probability for class star for the objects, the second row from top, for class white dwarf, the third, for class physical binary, the fourth, for class quasar,  and the bottom row, for class galaxy. The grey dots show a mixture of all classes, for comparison.}
+\label{fig:PosProbsVsPm5by5}
+\end{figure}
+
+
+%\subsubsection{Magnitude histograms per estimated class}
+
+%\subsubsection{Sky maps of classification accuracy}
+
+\pagebreak
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\subsection{Photometric SVM classifier} \label{subsec:regularcl:phot}
+
+This classifier applies a family of Support Vector Machine classifiers, each trained in a given magnitude range on a particular set of synthetic spectra, then combines them into one output probability vector. 
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\subsection{Bayesian combination}
+
+The output probability vectors from the above classifiers (Sections \ref{subsec:regularcl:astrom}, \ref{subsec:regularcl:pos}, and \ref{subsec:regularcl:phot}) are combined into a single probability vector, synthetizing prior knowledge about the relative frequency of the classes and the information about its position, magnitude, proper motion and spectrum.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\end{document}
+\end{document}
+
+# <<label=figEtsProbVectorsByTrueClass, include=false, echo=false>>=
+# c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+# rgb.tmp <- sapply(c.tmp, col2rgb)
+# tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 64, maxColorValue = 255), 
+	# '-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 64, maxColorValue = 255), 
+    # '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 64, maxColorValue = 255), 
+    # '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 64, maxColorValue = 255), 
+    # '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 64, maxColorValue = 255), 
+    # '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 64, maxColorValue = 255), 
+    # '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 64, maxColorValue = 255), 
+    # '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 64, maxColorValue = 255), 
+    # '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 64, maxColorValue = 255))
+
+# par(mfrow = c(2,3), mar = c(2.7,2.7,2,1), mgp = c(1.6,0.6,0))
+# for(ii in 1:5)
+   # {
+   	# n.tmp <- sum(gaia1$true_SourceType == cu8class.nums[ii], na.rm = T)
+   	# if(n.tmp > 0)
+   	   # {
+   		# i.tmp <- sample(which(gaia1$true_SourceType == cu8class.nums[ii] &
+		   # !is.na(gaia1$ets.class)), size = min(500, 
+   		   # sum(gaia1$true_SourceType == cu8class.nums[ii]  &
+		   # !is.na(gaia1$ets.class), na.rm = T)))
+		# l.tmp <- as.character(gaia1$true_SourceType[i.tmp])
+		# plot(1:5, gaia1[i.tmp[1], paste0("etsprob", c(0:2,4,5))], axes = F,
+		   # type = "l", col = tc.tmp[l.tmp[1]], xlab = "DSC label", ylab = "Probability",
+		   # ylim = c(0,1), main = paste0("True class: ", cu8class.str[ii]))
+		# box()
+		# axis(1, at = 1:5, labels = cu8class.names)
+		# axis(2)
+		# for(jj in 2:length(i.tmp))
+		   # {
+		   	# lines(1:5, gaia1[i.tmp[jj], paste0("etsprob", c(0:2,4,5))], col = tc.tmp[l.tmp[jj]])
+		   # }
+	   # } else {
+		# plot(1:5, gaia1[i.tmp[1], paste0("etsprob", c(0:2,4,5))], axes = F,
+		   # type = "n", xlab = "DSC label", ylab = "Probability",
+		   # ylim = c(0,1), main = paste0("True class: ", cu8class.str[ii]))
+		# box()
+		# axis(1, at = 1:5, labels = cu8class.names)
+		# axis(2)
+	   # }
+   # }
+# plot(1:5, gaia1[i.tmp[1], paste0("etsprob", c(0:2,4,5))], axes = F,
+   # type = "n", xlab = "", ylab = "",
+   # ylim = c(0,1), main = "Colour key for true classes")
+# legend(1, 1, legend = cu8class.str, col = tc.tmp[cu8class.names], lty = 1, lwd = 2, bty = "n", cex = 1.2)
+# @
+
+# \begin{figure}[H]
+# \begin{center}
+# <<label=fig:EtsProbVectorsByTrueClass,fig=TRUE,echo=FALSE, height=5.3, width=12>>=
+# <<figEtsProbVectorsByTrueClass>>
+# @
+# \end{center}
+# \caption{The probability vectors produced by the ET classifier based on the BP/RP spectra, for a sample of 500 objects of each true class. }
+# \label{fig:EtsProbVectorsByTrueClass}
+# \end{figure}
+
+# <<label=figEtsProbVectorsByEstimEtsClass, include=false, echo=false>>=
+# c.tmp <- c('-4' = "cyan", '-3' = "violet", '-2' = "deepskyblue",  '-1' = "darkblue", '0' = "orange", '1' = "blue", '2' = "red", '4' = "blueviolet", '5' = "green3")
+# rgb.tmp <- sapply(c.tmp, col2rgb)
+# tc.tmp <- c('-4' = rgb(red = rgb.tmp[1,'-4'], green = rgb.tmp[2,'-4'], blue = rgb.tmp[3,'-4'], alpha = 64, maxColorValue = 255), 
+	# '-3' = rgb(red = rgb.tmp[1,'-3'], green = rgb.tmp[2,'-3'], blue = rgb.tmp[3,'-3'], alpha = 64, maxColorValue = 255), 
+    # '-2' = rgb(red = rgb.tmp[1,'-2'], green = rgb.tmp[2,'-2'], blue = rgb.tmp[3,'-2'], alpha = 64, maxColorValue = 255), 
+    # '-1' = rgb(red = rgb.tmp[1,'-1'], green = rgb.tmp[2,'-1'], blue = rgb.tmp[3,'-1'], alpha = 64, maxColorValue = 255), 
+    # '0' = rgb(red = rgb.tmp[1,'0'], green = rgb.tmp[2,'0'], blue = rgb.tmp[3,'0'], alpha = 64, maxColorValue = 255), 
+    # '1' = rgb(red = rgb.tmp[1,'1'], green = rgb.tmp[2,'1'], blue = rgb.tmp[3,'1'], alpha = 64, maxColorValue = 255), 
+    # '2' = rgb(red = rgb.tmp[1,'2'], green = rgb.tmp[2,'2'], blue = rgb.tmp[3,'2'], alpha = 64, maxColorValue = 255), 
+    # '4' = rgb(red = rgb.tmp[1,'4'], green = rgb.tmp[2,'4'], blue = rgb.tmp[3,'4'], alpha = 64, maxColorValue = 255), 
+    # '5' = rgb(red = rgb.tmp[1,'5'], green = rgb.tmp[2,'5'], blue = rgb.tmp[3,'5'], alpha = 64, maxColorValue = 255))
+
+# par(mfrow = c(2,3), mar = c(2.7,2.7,2,1), mgp = c(1.6,0.6,0))
+
+# for(ii in 1:5)
+   # {
+   	# n.tmp <- sum(gaia1$ets.class == cu8class.nums[ii], na.rm = T)
+   	# if(n.tmp > 0)
+   	   # {
+   		# i.tmp <- sample(which(gaia1$ets.class == cu8class.nums[ii] &
+	   	   # is.element(gaia1$true_SourceType, c(0,1,2,4,5))), size = min(500, 
+   		   # sum(gaia1$ets.class == cu8class.nums[ii] &
+	   	   # is.element(gaia1$true_SourceType, c(0,1,2,4,5)), na.rm = T)))
+		# l.tmp <- as.character(gaia1$true_SourceType[i.tmp])
+		# plot(1:5, gaia1[i.tmp[1], paste0("etsprob", c(0:2,4,5))], axes = F,
+		   # type = "l", col = tc.tmp[l.tmp[1]], xlab = "DSC label", ylab = "Probability",
+		   # ylim = c(0,1), main = paste0("Est. ExtraTree class: ", cu8class.str[ii]))
+		# box()
+		# axis(1, at = 1:5, labels = cu8class.names)
+		# axis(2)
+		# for(jj in 2:length(i.tmp))
+		   # {
+		   	# lines(1:5, gaia1[i.tmp[jj], paste0("etsprob", c(0:2,4,5))], col = tc.tmp[l.tmp[jj]])
+		   # }
+	   # } else {
+		# plot(1:5, gaia1[i.tmp[1], paste0("etsprob", c(0:2,4,5))], axes = F,
+		   # type = "n", xlab = "DSC label", ylab = "Probability",
+		   # ylim = c(0,1), main = paste0("Est. ExtraTree class: ", cu8class.str[ii]))
+		# box()
+		# axis(1, at = 1:5, labels = cu8class.names)
+		# axis(2)
+	   # }
+   # }
+# plot(1:5, gaia1[i.tmp[1], paste0("etsprob", c(0:2,4,5))], axes = F,
+   # type = "n", xlab = "", ylab = "",
+   # ylim = c(0,1), main = "Colour key for true classes")
+# legend(1, 1, legend = cu8class.str, col = tc.tmp[cu8class.names], lty = 1, lwd = 2, bty = "n", cex = 1.2)
+# @
+
+# \begin{figure}[H]
+# \begin{center}
+# <<label=fig:EtsProbVectorsByEstimEtsClass,fig=TRUE,echo=FALSE, height=5.3, width=12>>=
+# <<figEtsProbVectorsByEstimEtsClass>>
+# @
+# \end{center}
+# \caption{The probability vectors produced by the astrometric classifier, for a sample of 500 objects of each estimated class. The true class is colour-coded (the same as in Figure \ref{fig:EtsProbVectorsByEstimEtsClass}).}
+# \label{fig:EtsProbVectorsByEstimEtsClass}
+# \end{figure}
+
+
